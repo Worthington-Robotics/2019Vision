@@ -12,7 +12,7 @@ class GripPipeline:
         """initializes all values to presets or None if need to be set
         """
 
-        self.__hsv_threshold_hue = [40.40970304596353, 70.33781488413739]
+        self.__hsv_threshold_hue = [67.52834711376013, 96.00626408199835]
         self.__hsv_threshold_saturation = [0.0, 255.0]
         self.__hsv_threshold_value = [30.575537745901155, 255.0]
 
@@ -52,6 +52,10 @@ class GripPipeline:
 
         self.filter_contours_output = None
 
+        self.__convex_hulls_contours = self.filter_contours_output
+
+        self.convex_hulls_output = None
+
 
     def process(self, source0):
         """
@@ -77,6 +81,10 @@ class GripPipeline:
         # Step Filter_Contours0:
         self.__filter_contours_contours = self.find_contours_output
         (self.filter_contours_output) = self.__filter_contours(self.__filter_contours_contours, self.__filter_contours_min_area, self.__filter_contours_min_perimeter, self.__filter_contours_min_width, self.__filter_contours_max_width, self.__filter_contours_min_height, self.__filter_contours_max_height, self.__filter_contours_solidity, self.__filter_contours_max_vertices, self.__filter_contours_min_vertices, self.__filter_contours_min_ratio, self.__filter_contours_max_ratio)
+
+        # Step Convex_Hulls0:
+        self.__convex_hulls_contours = self.filter_contours_output
+        (self.convex_hulls_output) = self.__convex_hulls(self.__convex_hulls_contours)
 
 
     @staticmethod
@@ -179,6 +187,19 @@ class GripPipeline:
             if (ratio < min_ratio or ratio > max_ratio):
                 continue
             output.append(contour)
+        return output
+
+    @staticmethod
+    def __convex_hulls(input_contours):
+        """Computes the convex hulls of contours.
+        Args:
+            input_contours: A list of numpy.ndarray that each represent a contour.
+        Returns:
+            A list of numpy.ndarray that each represent a contour.
+        """
+        output = []
+        for contour in input_contours:
+            output.append(cv2.convexHull(contour))
         return output
 
 

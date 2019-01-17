@@ -33,7 +33,7 @@ def publish_contours(pipeline):
         # Find the centers of mass of the contours
         # https://docs.opencv.org/3.4.2/dd/d49/tutorial_py_contour_features.html
 
-        moments = cv.moments(contour)
+        moments = cv2.moments(contour)
         cx = int(moments['m10'] / moments['m00'])
         cy = int(moments['m01'] / moments['m00'])
         contour_x_positions.append(cx)
@@ -112,13 +112,16 @@ def main():
 
     # Initialize pipeline from genereated GRIP code
     pipeline = GripPipeline()
-
-    while True:
+    loop = True
+    while loop:
         capture = connect()
         try:
             processStream(pipeline, capture)
-        except:
+        except KeyboardException:
+            loop = False
+        except Exception as e:
             print('Error processing video stream.\n')
+            print(e)
 
         capture.release()
         print('Disconnected from video stream.\n')
