@@ -10,8 +10,8 @@ Description: This script uses a generated GRIP pipeline to process a camera
 
 Comments:    This script should be uploaded to the Raspberry Pi using the 
              FRCVision web console.  Navigate to the "Application" tab and 
-             select the "Uploaded Python file" option.  Make sure also to 
-             upload the grip.py file to the /home/pi/ directory of the 
+             select the "Uploaded Python file" option.  The grip.py script 
+             should be manually uploaded to the /home/pi/ directory of the 
              Raspberry Pi.
 ----------------------------------------------------------------------------
 """
@@ -38,6 +38,9 @@ class CameraConfig:
     stream_config = None
 
 
+# Enable/Disable Custom Camera Output (i.e. crosshairs on target)
+ENABLE_CUSTOM_OUTPUT = True
+
 # Network Table constants
 VISION_TABLE = "vision"
 CENTER_X = "centerX"
@@ -46,6 +49,7 @@ CENTER_Y = "centerY"
 # Camera config file
 config_file = "/boot/frc.json"
 
+# Camera settings
 team = None
 server = False
 camera_configs = []
@@ -175,6 +179,19 @@ def startCamera(config):
     return camera
 
 
+def startOutputSource():
+    """
+    Create an output source and server to ouput custom frames
+    """
+
+    inst = CameraServer.getInstance()
+    sink = inst.addServer(name="grip", port=1182)
+    cv_source = inst.putVideo("Grip Output", 320, 240)
+    sink.setSource(cv_source)
+
+    return cv_source
+
+
 def readFrame(camera):
     """
     Reads the latest frame from the camera server instance to pass to opencv.
@@ -228,8 +245,21 @@ def processFrame(frame, pipeline):
     table.putValue(CENTER_Y, center_y)
     print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
 
+    return (center_x, center_y)
 
-def processVision(camera, pipeline):
+
+def writeFrame(cv_source, frame, x, y):
+    """
+    Draw cross hairs on the target and put the frame in the output stream
+    """
+
+    if (x >= 0 and y >= 0):
+        cv2.drawMarker(frame, (x, y), (0, 0, 255))
+
+    cv_source.putFrame(frame)
+
+
+def processVision(camera, pipeline, cv_source):
     """
     Read the latest frame and process using the Grip Pipeline.
     """
@@ -239,7 +269,10 @@ def processVision(camera, pipeline):
 
         frame = readFrame(camera)
         if (frame is not None):
-            processFrame(frame, pipeline)
+            (x, y) = processFrame(frame, pipeline)
+
+            if (ENABLE_CUSTOM_OUTPUT):
+                writeFrame(cv_source, frame, x, y)
 
         end = time.time()
         print('Frame process time: ' + str(end - start) + ' s\n')
@@ -266,6 +299,11 @@ def main():
         camera = startCamera(camera_config)
         time.sleep(3)
 
+    # Start custom output stream
+    cv_source = None
+    if (ENABLE_CUSTOM_OUTPUT):
+        cv_source = startOutputSource()
+
     print("Running Grip Pipeline...")
 
     # Initialize Grip Pipeline
@@ -273,7 +311,7 @@ def main():
 
     # Loop forever
     while True:
-        processVision(camera, pipeline)
+        processVision(camera, pipeline, cv_source)
 
 
 if __name__ == "__main__":
