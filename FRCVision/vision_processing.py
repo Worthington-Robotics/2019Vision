@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 ----------------------------------------------------------------------------
 Authors:     FRC Team 4145
@@ -40,6 +39,9 @@ class CameraConfig:
 
 # Enable/Disable Custom Camera Output (i.e. crosshairs on target)
 ENABLE_CUSTOM_OUTPUT = True
+
+# Enable Debug
+ENABLE_DEBUG = False
 
 # Network Table constants
 VISION_TABLE = "vision"
@@ -139,6 +141,7 @@ def readConfig():
     except KeyError:
         parseError("could not read cameras")
         return False
+
     for camera in cameras:
         if not readCameraConfig(camera):
             return False
@@ -168,7 +171,8 @@ def startCamera(config):
     print("Starting camera '{}' on {}".format(config.name, config.path))
     inst = CameraServer.getInstance()
     camera = UsbCamera(config.name, config.path)
-    camera_server = inst.startAutomaticCapture(camera=camera, return_server=True)
+    camera_server = inst.startAutomaticCapture(
+        camera=camera, return_server=True)
 
     camera.setConfigJson(json.dumps(config.config))
     camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
@@ -179,14 +183,32 @@ def startCamera(config):
     return camera
 
 
-def startOutputSource():
+def parseDimensions(camera_config):
+    """
+    Parse the width and height of the camera.
+    """
+
+    width = None
+    height = None
+    try:
+        width = camera_config.config["width"]
+        height = camera_config.config["height"]
+    except KeyError:
+        parseError("Could not read width/height")
+
+    return (width, height)
+
+
+def startOutputSource(camera_config):
     """
     Create an output source and server to ouput custom frames.
     """
 
+    (width, height) = parseDimensions(camera_config)
+
     inst = CameraServer.getInstance()
     sink = inst.addServer(name="grip", port=1182)
-    cv_source = inst.putVideo("Grip Output", 320, 240)
+    cv_source = inst.putVideo("grip", width, height)
     sink.setSource(cv_source)
 
     return cv_source
@@ -251,7 +273,8 @@ def publishValues(center_x, center_y):
     table.putValue(CENTER_X, center_x)
     table.putValue(CENTER_Y, center_y)
 
-    print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
+    if (ENABLE_DEBUG):
+        print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
 
 
 def writeFrame(cv_source, frame, x, y):
@@ -260,7 +283,12 @@ def writeFrame(cv_source, frame, x, y):
     """
 
     if (x >= 0 and y >= 0):
-        cv2.drawMarker(frame, (int(x), int(y)), (0, 0, 255))
+        cv2.drawMarker(
+            img=frame,
+            position=(int(x), int(y)),
+            color=(0, 0, 255),
+            markerSize=40,
+            thickness=3)
 
     cv_source.putFrame(frame)
 
@@ -283,7 +311,9 @@ def processVision(camera, pipeline, cv_source):
                 writeFrame(cv_source, frame, x, y)
 
         end = time.time()
-        print('Frame process time: ' + str(end - start) + ' s\n')
+
+        if (ENABLE_DEBUG):
+            print('Frame process time: ' + str(end - start) + ' s\n')
 
 
 def main():
@@ -302,6 +332,7 @@ def main():
 
     # Start camera
     camera = None
+    camera_config = None
     if (len(camera_configs) >= 1):
         camera_config = camera_configs[0]
         camera = startCamera(camera_config)
@@ -310,7 +341,7 @@ def main():
     # Start custom output stream
     cv_source = None
     if (ENABLE_CUSTOM_OUTPUT):
-        cv_source = startOutputSource()
+        cv_source = startOutputSource(camera_config)
 
     print("Running Grip Pipeline...")
 
