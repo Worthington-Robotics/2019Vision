@@ -1,45 +1,67 @@
 #!/usr/bin/env python3
-#----------------------------------------------------------------------------
-# Copyright (c) 2018 FIRST. All Rights Reserved.
-# Open Source Software - may be modified and shared by FRC teams. The code
-# must be accompanied by the FIRST BSD license file in the root directory of
-# the project.
-#----------------------------------------------------------------------------
+
+"""
+----------------------------------------------------------------------------
+Authors:     FRC Team 4145
+
+Description: This script uses a generated GRIP pipeline to process a camera 
+             stream and publish results to NetworkTables.  This script is
+             designed to work on the 2019 FRCVision Raspberry Pi image.
+
+Comments:    This script should be uploaded to the Raspberry Pi using the 
+             FRCVision web console.  Navigate to the "Application" tab and 
+             select the "Uploaded Python file" option.  Make sure also to 
+             upload the grip.py file to the /home/pi/ directory of the 
+             Raspberry Pi.
+----------------------------------------------------------------------------
+"""
 
 import json
 import time
 import sys
 
 from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
-from networktables import NetworkTablesInstance
+from networktables import NetworkTablesInstance, NetworkTables
 
 import cv2
 from grip import GripPipeline
 
-# Camera config file
-CONFIG_FILE = "/boot/frc.json"
-
 
 class CameraConfig:
-    pass
+    # Camera name
+    name = None
+    # Path to camera
+    path = None
+    # Camera config JSON
+    config = None
+    # Stream config JSON
+    stream_config = None
 
+
+# Network Table constants
+VISION_TABLE = "vision"
+CENTER_X = "centerX"
+CENTER_Y = "centerY"
+
+# Camera config file
+config_file = "/boot/frc.json"
 
 team = None
 server = False
 camera_configs = []
 
 
-def parseError(str):
+def parseError(line):
     """
     Report parse error.
     """
 
-    print("config error in '" + CONFIG_FILE + "': " + str, file=sys.stderr)
+    print("config error in '" + config_file + "': " + line, file=sys.stderr)
 
 
 def readCameraConfig(config):
     """
-    Read single camera configuration.
+    Read a single camera configuration.
     """
 
     cam = CameraConfig()
@@ -59,7 +81,7 @@ def readCameraConfig(config):
         return False
 
     # Parse stream properties
-    cam.streamConfig = config.get("stream")
+    cam.stream_config = config.get("stream")
 
     cam.config = config
 
@@ -69,7 +91,7 @@ def readCameraConfig(config):
 
 def readConfig():
     """
-    Read configuration file.
+    Read the configuration file.
     """
 
     global team
@@ -77,11 +99,11 @@ def readConfig():
 
     # Parse config file
     try:
-        with open(CONFIG_FILE, "rt") as f:
+        with open(config_file, "rt") as f:
             j = json.load(f)
     except OSError as err:
         print(
-            "could not open '{}': {}".format(CONFIG_FILE, err),
+            "could not open '{}': {}".format(config_file, err),
             file=sys.stderr)
         return False
 
@@ -99,13 +121,13 @@ def readConfig():
 
     # Parse network table mode (server/client)
     if "ntmode" in j:
-        str = j["ntmode"]
-        if str.lower() == "client":
+        mode = j["ntmode"]
+        if mode.lower() == "client":
             server = False
-        elif str.lower() == "server":
+        elif mode.lower() == "server":
             server = True
         else:
-            parseError("could not understand ntmode value '{}'".format(str))
+            parseError("could not understand ntmode value '{}'".format(mode))
 
     # Parse cameras
     try:
@@ -120,6 +142,20 @@ def readConfig():
     return True
 
 
+def startNetworkTables():
+    """
+    Connect to the Network Tables as a client or start the server locally.
+    """
+
+    ntinst = NetworkTablesInstance.getDefault()
+    if server:
+        print("Setting up NetworkTables server")
+        ntinst.startServer()
+    else:
+        print("Setting up NetworkTables client for team {}".format(team))
+        ntinst.startClientTeam(team)
+
+
 def startCamera(config):
     """
     Start running the camera.
@@ -128,20 +164,20 @@ def startCamera(config):
     print("Starting camera '{}' on {}".format(config.name, config.path))
     inst = CameraServer.getInstance()
     camera = UsbCamera(config.name, config.path)
-    server = inst.startAutomaticCapture(camera=camera, return_server=True)
+    camera_server = inst.startAutomaticCapture(camera=camera, return_server=True)
 
     camera.setConfigJson(json.dumps(config.config))
     camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
 
-    if config.streamConfig is not None:
-        server.setConfigJson(json.dumps(config.streamConfig))
+    if config.stream_config is not None:
+        camera_server.setConfigJson(json.dumps(config.stream_config))
 
     return camera
 
 
 def readFrame(camera):
     """
-    Reads the latest frame from the camera server instance to pass to opencv
+    Reads the latest frame from the camera server instance to pass to opencv.
     :param camera: The camera to read from
     :return: The latest frame
     """
@@ -149,7 +185,7 @@ def readFrame(camera):
     inst = CameraServer.getInstance()
     cv_sink = inst.getVideo(camera=camera)
 
-    frameTime, frame = cv_sink.grabFrame(None)
+    (frame_time, frame) = cv_sink.grabFrame(None)
 
     return frame
 
@@ -178,7 +214,7 @@ def processFrame(frame, pipeline):
         contour_x_positions.append(cx)
         contour_y_positions.append(cy)
 
-    # Calculate the center between two contours (i.e. half the distance between the two contours)
+    # Calculate the midpoint between two contours
     center_x = -1
     center_y = -1
 
@@ -187,50 +223,58 @@ def processFrame(frame, pipeline):
         center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
 
     # Publish to the 'vision' network table
-    # table = NetworkTables.getTable(VISION_TABLE)
-    # table.putValue(CENTER_X, center_x)
-    # table.putValue(CENTER_Y, center_y)
+    table = NetworkTables.getTable(VISION_TABLE)
+    table.putValue(CENTER_X, center_x)
+    table.putValue(CENTER_Y, center_y)
     print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
 
 
-if __name__ == "__main__":
+def processVision(camera, pipeline):
+    """
+    Read the latest frame and process using the Grip Pipeline.
+    """
+
+    if (camera is not None):
+        start = time.time()
+
+        frame = readFrame(camera)
+        if (frame is not None):
+            processFrame(frame, pipeline)
+
+        end = time.time()
+        print('Frame process time: ' + str(end - start) + ' s\n')
+
+
+def main():
+    global config_file
+
     if len(sys.argv) >= 2:
-        CONFIG_FILE = sys.argv[1]
+        config_file = sys.argv[1]
 
     # Read configuration
-    if not readConfig():
+    read = readConfig()
+    if not read:
         sys.exit(1)
 
     # Start NetworkTables
-    ntinst = NetworkTablesInstance.getDefault()
-    if server:
-        print("Setting up NetworkTables server")
-        ntinst.startServer()
-    else:
-        print("Setting up NetworkTables client for team {}".format(team))
-        ntinst.startClientTeam(team)
+    startNetworkTables()
 
     # Start camera
     camera = None
     if (len(camera_configs) >= 1):
-        cameraConfig = camera_configs[0]
-        camera = startCamera(cameraConfig)
-        time.sleep(5)
+        camera_config = camera_configs[0]
+        camera = startCamera(camera_config)
+        time.sleep(3)
+
+    print("Running Grip Pipeline...")
 
     # Initialize Grip Pipeline
     pipeline = GripPipeline()
 
-    print("Running Custom Code")
-
     # Loop forever
     while True:
-        if (camera is not None):
-            start = time.time()
+        processVision(camera, pipeline)
 
-            # Read frame and process using the Grip Pipeline
-            frame = readFrame(camera)
-            if (frame is not None):
-                processFrame(frame, pipeline)
 
-            end = time.time()
-            print('elapsed: ' + str(end - start) + '\n')
+if __name__ == "__main__":
+    main()
