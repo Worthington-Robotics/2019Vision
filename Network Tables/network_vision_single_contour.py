@@ -43,9 +43,9 @@ def publish_contours(pipeline):
     center_x = -1
     center_y = -1
 
-    if (len(contour_x_positions) == 2 and len(contour_y_positions) == 2):
-        center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
-        center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
+    if (len(contour_x_positions) == 1 and len(contour_y_positions) == 1):
+        center_x = (contour_x_positions[0])
+        center_y = (contour_y_positions[0])
 
     # Publish to the 'vision' network table
     # table = NetworkTables.getTable(VISION_TABLE)
