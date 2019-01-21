@@ -260,7 +260,7 @@ def writeFrame(cv_source, frame, x, y):
     """
 
     if (x >= 0 and y >= 0):
-        cv2.drawMarker(frame, (x, y), (0, 0, 255))
+        cv2.drawMarker(frame, (int(x), int(y)), (0, 0, 255))
 
     cv_source.putFrame(frame)
 
