@@ -181,7 +181,7 @@ def startCamera(config):
 
 def startOutputSource():
     """
-    Create an output source and server to ouput custom frames
+    Create an output source and server to ouput custom frames.
     """
 
     inst = CameraServer.getInstance()
@@ -250,7 +250,7 @@ def processFrame(frame, pipeline):
 
 def writeFrame(cv_source, frame, x, y):
     """
-    Draw cross hairs on the target and put the frame in the output stream
+    Draw crosshairs on the target and put the frame in the output stream.
     """
 
     if (x >= 0 and y >= 0):
