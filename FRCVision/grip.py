@@ -12,13 +12,27 @@ class GripPipeline:
         """initializes all values to presets or None if need to be set
         """
 
-        self.__hsv_threshold_hue = [155.3956834532374, 180.0]
-        self.__hsv_threshold_saturation = [41.276978417266186, 255.0]
-        self.__hsv_threshold_value = [64.20863309352518, 255.0]
+        self.__hsv_threshold_hue = [67.52834711376013, 96.00626408199835]
+        self.__hsv_threshold_saturation = [0.0, 255.0]
+        self.__hsv_threshold_value = [30.575537745901155, 255.0]
 
         self.hsv_threshold_output = None
 
-        self.__find_contours_input = self.hsv_threshold_output
+        self.__cv_erode_src = self.hsv_threshold_output
+        self.__cv_erode_kernel = None
+        self.__cv_erode_anchor = (-1, -1)
+        self.__cv_erode_iterations = 1.0
+        self.__cv_erode_bordertype = cv2.BORDER_CONSTANT
+        self.__cv_erode_bordervalue = (-1)
+
+        self.cv_erode_output = None
+
+        self.__mask_input = self.cv_erode_output
+        self.__mask_mask = self.hsv_threshold_output
+
+        self.mask_output = None
+
+        self.__find_contours_input = self.mask_output
         self.__find_contours_external_only = False
 
         self.find_contours_output = None
@@ -26,17 +40,21 @@ class GripPipeline:
         self.__filter_contours_contours = self.find_contours_output
         self.__filter_contours_min_area = 0.0
         self.__filter_contours_min_perimeter = 0.0
-        self.__filter_contours_min_width = 5.0
+        self.__filter_contours_min_width = 10.0
         self.__filter_contours_max_width = 1000.0
-        self.__filter_contours_min_height = 10.0
+        self.__filter_contours_min_height = 70.0
         self.__filter_contours_max_height = 1000.0
-        self.__filter_contours_solidity = [66.54676258992806, 100.0]
+        self.__filter_contours_solidity = [70.34371825430892, 100.0]
         self.__filter_contours_max_vertices = 1000001.0
         self.__filter_contours_min_vertices = 0.0
         self.__filter_contours_min_ratio = 0.0
         self.__filter_contours_max_ratio = 1000.0
 
         self.filter_contours_output = None
+
+        self.__convex_hulls_contours = self.filter_contours_output
+
+        self.convex_hulls_output = None
 
 
     def process(self, source0):
@@ -47,13 +65,26 @@ class GripPipeline:
         self.__hsv_threshold_input = source0
         (self.hsv_threshold_output) = self.__hsv_threshold(self.__hsv_threshold_input, self.__hsv_threshold_hue, self.__hsv_threshold_saturation, self.__hsv_threshold_value)
 
+        # Step CV_erode0:
+        self.__cv_erode_src = self.hsv_threshold_output
+        (self.cv_erode_output) = self.__cv_erode(self.__cv_erode_src, self.__cv_erode_kernel, self.__cv_erode_anchor, self.__cv_erode_iterations, self.__cv_erode_bordertype, self.__cv_erode_bordervalue)
+
+        # Step Mask0:
+        self.__mask_input = self.cv_erode_output
+        self.__mask_mask = self.hsv_threshold_output
+        (self.mask_output) = self.__mask(self.__mask_input, self.__mask_mask)
+
         # Step Find_Contours0:
-        self.__find_contours_input = self.hsv_threshold_output
+        self.__find_contours_input = self.mask_output
         (self.find_contours_output) = self.__find_contours(self.__find_contours_input, self.__find_contours_external_only)
 
         # Step Filter_Contours0:
         self.__filter_contours_contours = self.find_contours_output
         (self.filter_contours_output) = self.__filter_contours(self.__filter_contours_contours, self.__filter_contours_min_area, self.__filter_contours_min_perimeter, self.__filter_contours_min_width, self.__filter_contours_max_width, self.__filter_contours_min_height, self.__filter_contours_max_height, self.__filter_contours_solidity, self.__filter_contours_max_vertices, self.__filter_contours_min_vertices, self.__filter_contours_min_ratio, self.__filter_contours_max_ratio)
+
+        # Step Convex_Hulls0:
+        self.__convex_hulls_contours = self.filter_contours_output
+        (self.convex_hulls_output) = self.__convex_hulls(self.__convex_hulls_contours)
 
 
     @staticmethod
@@ -69,6 +100,32 @@ class GripPipeline:
         """
         out = cv2.cvtColor(input, cv2.COLOR_BGR2HSV)
         return cv2.inRange(out, (hue[0], sat[0], val[0]),  (hue[1], sat[1], val[1]))
+
+    @staticmethod
+    def __cv_erode(src, kernel, anchor, iterations, border_type, border_value):
+        """Expands area of lower value in an image.
+        Args:
+           src: A numpy.ndarray.
+           kernel: The kernel for erosion. A numpy.ndarray.
+           iterations: the number of times to erode.
+           border_type: Opencv enum that represents a border type.
+           border_value: value to be used for a constant border.
+        Returns:
+            A numpy.ndarray after erosion.
+        """
+        return cv2.erode(src, kernel, anchor, iterations = (int) (iterations +0.5),
+                            borderType = border_type, borderValue = border_value)
+
+    @staticmethod
+    def __mask(input, mask):
+        """Filter out an area of an image using a binary mask.
+        Args:
+            input: A three channel numpy.ndarray.
+            mask: A black and white numpy.ndarray.
+        Returns:
+            A three channel numpy.ndarray.
+        """
+        return cv2.bitwise_and(input, input, mask=mask)
 
     @staticmethod
     def __find_contours(input, external_only):
@@ -130,6 +187,19 @@ class GripPipeline:
             if (ratio < min_ratio or ratio > max_ratio):
                 continue
             output.append(contour)
+        return output
+
+    @staticmethod
+    def __convex_hulls(input_contours):
+        """Computes the convex hulls of contours.
+        Args:
+            input_contours: A list of numpy.ndarray that each represent a contour.
+        Returns:
+            A list of numpy.ndarray that each represent a contour.
+        """
+        output = []
+        for contour in input_contours:
+            output.append(cv2.convexHull(contour))
         return output
 
 
