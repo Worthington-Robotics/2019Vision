@@ -209,9 +209,9 @@ def readFrame(camera):
 
 def processFrame(frame, pipeline):
     """
-    Performs extra processing on the pipeline's outputs and publishes data to NetworkTables.
+    Performs extra processing on the pipeline's outputs.
     :param pipeline: The pipeline that just processed an image
-    :return: None
+    :return: The center coordinates of the target
     """
 
     # Process the Grip Pipeline
@@ -239,13 +239,19 @@ def processFrame(frame, pipeline):
         center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
         center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
 
-    # Publish to the 'vision' network table
+    return (center_x, center_y)
+
+
+def publishValues(center_x, center_y):
+    """
+    Publish coordinates/values to the 'vision' network table.
+    """
+
     table = NetworkTables.getTable(VISION_TABLE)
     table.putValue(CENTER_X, center_x)
     table.putValue(CENTER_Y, center_y)
-    print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
 
-    return (center_x, center_y)
+    print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
 
 
 def writeFrame(cv_source, frame, x, y):
@@ -270,6 +276,8 @@ def processVision(camera, pipeline, cv_source):
         frame = readFrame(camera)
         if (frame is not None):
             (x, y) = processFrame(frame, pipeline)
+
+            publishValues(x, y)
 
             if (ENABLE_CUSTOM_OUTPUT):
                 writeFrame(cv_source, frame, x, y)
