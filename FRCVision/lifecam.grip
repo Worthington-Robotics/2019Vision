@@ -9,8 +9,8 @@
       <grip:Input step="0" socket="0"/>
       <grip:Input step="0" socket="1">
         <value>
-          <double>67.52834711376013</double>
-          <double>96.00626408199835</double>
+          <double>72.61309287647201</double>
+          <double>104.0276544563299</double>
         </value>
       </grip:Input>
       <grip:Input step="0" socket="2">
@@ -21,7 +21,7 @@
       </grip:Input>
       <grip:Input step="0" socket="3">
         <value>
-          <double>30.575537745901155</double>
+          <double>156.0734463276836</double>
           <double>255.0</double>
         </value>
       </grip:Input>
@@ -67,7 +67,7 @@
         <value>1000.0</value>
       </grip:Input>
       <grip:Input step="4" socket="5">
-        <value>70.0</value>
+        <value>10.0</value>
       </grip:Input>
       <grip:Input step="4" socket="6">
         <value>1000.0</value>
@@ -143,12 +143,12 @@
       <grip:Input step="3" socket="0"/>
     </grip:Connection>
     <grip:Connection>
-      <grip:Output step="5" socket="0" previewed="true"/>
-      <grip:Input step="6" socket="0"/>
-    </grip:Connection>
-    <grip:Connection>
       <grip:Output step="0" socket="0" previewed="true"/>
       <grip:Input step="2" socket="1"/>
+    </grip:Connection>
+    <grip:Connection>
+      <grip:Output step="5" socket="0" previewed="true"/>
+      <grip:Input step="6" socket="0"/>
     </grip:Connection>
     <grip:Connection>
       <grip:Output step="3" socket="0" previewed="true"/>
@@ -168,7 +168,7 @@
     <language>Python</language>
     <className>GripPipeline</className>
     <implementWpilibPipeline>false</implementWpilibPipeline>
-    <saveDir>C:\Users\Robotics2\GRIP</saveDir>
+    <saveDir>C:\Users\Robotics3\Documents\GitHub\2019Vision\FRCVision</saveDir>
     <packageName></packageName>
     <moduleName>grip</moduleName>
   </codeGenerationSettings>

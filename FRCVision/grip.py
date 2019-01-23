@@ -12,9 +12,9 @@ class GripPipeline:
         """initializes all values to presets or None if need to be set
         """
 
-        self.__hsv_threshold_hue = [67.52834711376013, 96.00626408199835]
+        self.__hsv_threshold_hue = [72.61309287647201, 104.0276544563299]
         self.__hsv_threshold_saturation = [0.0, 255.0]
-        self.__hsv_threshold_value = [30.575537745901155, 255.0]
+        self.__hsv_threshold_value = [156.0734463276836, 255.0]
 
         self.hsv_threshold_output = None
 
@@ -42,7 +42,7 @@ class GripPipeline:
         self.__filter_contours_min_perimeter = 0.0
         self.__filter_contours_min_width = 10.0
         self.__filter_contours_max_width = 1000.0
-        self.__filter_contours_min_height = 70.0
+        self.__filter_contours_min_height = 10.0
         self.__filter_contours_max_height = 1000.0
         self.__filter_contours_solidity = [70.34371825430892, 100.0]
         self.__filter_contours_max_vertices = 1000001.0
