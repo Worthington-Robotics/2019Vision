@@ -18,6 +18,7 @@ Comments:    This script should be uploaded to the Raspberry Pi using the
 import json
 import time
 import sys
+from math import sqrt
 
 from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
 from networktables import NetworkTablesInstance, NetworkTables
@@ -256,10 +257,15 @@ def processFrame(frame, pipeline):
     # Calculate the midpoint between two contours
     center_x = -1
     center_y = -1
+    distance = -1
 
     if (len(contour_x_positions) == 2 and len(contour_y_positions) == 2):
         center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
         center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
+
+        distance = sqrt((contour_x_positions[0] - contour_x_positions[1])**2 + (contour_y_positions[0] - contour_y_positions[1])**2)
+
+    print('DISTANCE = ' + str(distance))
 
     return (center_x, center_y)
 
