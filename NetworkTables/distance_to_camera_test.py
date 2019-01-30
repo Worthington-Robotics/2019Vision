@@ -1,32 +1,247 @@
+#!/usr/bin/env python3
 """
-Description: Script that uses a generated GRIP pipeline to calculate contours and publish results to NetworkTables.
-Authors: FRC Team 4145
-Comments: Make sure to update all IP addresses and paths to correspond with the correct robot.
+----------------------------------------------------------------------------
+Authors:     FRC Team 4145
+
+Description: This script uses a generated GRIP pipeline to process a camera
+             stream and publish results to NetworkTables.  This script is
+             designed to work on the 2019 FRCVision Raspberry Pi image.
+
+Comments:    This script should be uploaded to the Raspberry Pi using the
+             FRCVision web console.  Navigate to the "Application" tab and
+             select the "Uploaded Python file" option.  The grip.py script
+             should be manually uploaded to the /home/pi/ directory of the
+             Raspberry Pi.
+----------------------------------------------------------------------------
 """
+
+import json
+import time
+import sys
+from math import sqrt, sin
+
+from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
+from networktables import NetworkTablesInstance, NetworkTables
 
 import cv2
-import time
-from networktables import NetworkTables
 from grip import GripPipeline
-from math import sin
 
-#TODO: Update IP addresses and paths
-VIDEO_STREAM_URL = "http://192.168.1.2/mjpg/video.mjpg"
-ROBORIO_IP = '192.168.1.5'
 
+class CameraConfig:
+    # Camera name
+    name = None
+    # Path to camera
+    path = None
+    # Camera config JSON
+    config = None
+    # Stream config JSON
+    stream_config = None
+
+
+# Enable/Disable Custom Camera Output (i.e. crosshairs on target)
+ENABLE_CUSTOM_OUTPUT = True
+
+# Enable Debug
+ENABLE_DEBUG = False
+
+# Network Table constants
 VISION_TABLE = "vision"
 CENTER_X = "centerX"
 CENTER_Y = "centerY"
+ANGLE = "angle"
 
-def distance_to_camera(knownWidth, focalLength, imageWidth):
-    return knownWidth * focalLength / imageWidth
+# Camera config file
+config_file = "/boot/frc.json"
 
-def publish_contours(pipeline):
+# Camera settings
+team = None
+server = False
+camera_configs = []
+
+
+def parseError(line):
+    """
+    Report parse error.
+    """
+
+    print("config error in '" + config_file + "': " + line, file=sys.stderr)
+
+
+def readCameraConfig(config):
+    """
+    Read a single camera configuration.
+    """
+
+    cam = CameraConfig()
+
+    # Parse camera name
+    try:
+        cam.name = config["name"]
+    except KeyError:
+        parseError("could not read camera name")
+        return False
+
+    # Parse camera path
+    try:
+        cam.path = config["path"]
+    except KeyError:
+        parseError("camera '{}': could not read path".format(cam.name))
+        return False
+
+    # Parse stream properties
+    cam.stream_config = config.get("stream")
+
+    cam.config = config
+
+    camera_configs.append(cam)
+    return True
+
+
+def readConfig():
+    """
+    Read the configuration file.
+    """
+
+    global team
+    global server
+
+    # Parse config file
+    try:
+        with open(config_file, "rt") as f:
+            j = json.load(f)
+    except OSError as err:
+        print(
+            "could not open '{}': {}".format(config_file, err),
+            file=sys.stderr)
+        return False
+
+    # Top level must be an object
+    if not isinstance(j, dict):
+        parseError("must be JSON object")
+        return False
+
+    # Parse team number
+    try:
+        team = j["team"]
+    except KeyError:
+        parseError("could not read team number")
+        return False
+
+    # Parse network table mode (server/client)
+    if "ntmode" in j:
+        mode = j["ntmode"]
+        if mode.lower() == "client":
+            server = False
+        elif mode.lower() == "server":
+            server = True
+        else:
+            parseError("could not understand ntmode value '{}'".format(mode))
+
+    # Parse cameras
+    try:
+        cameras = j["cameras"]
+    except KeyError:
+        parseError("could not read cameras")
+        return False
+
+    for camera in cameras:
+        if not readCameraConfig(camera):
+            return False
+
+    return True
+
+
+def startNetworkTables():
+    """
+    Connect to the Network Tables as a client or start the server locally.
+    """
+
+    ntinst = NetworkTablesInstance.getDefault()
+    if server:
+        print("Setting up NetworkTables server")
+        ntinst.startServer()
+    else:
+        print("Setting up NetworkTables client for team {}".format(team))
+        ntinst.startClientTeam(team)
+
+
+def startCamera(config):
+    """
+    Start running the camera.
+    """
+
+    print("Starting camera '{}' on {}".format(config.name, config.path))
+    inst = CameraServer.getInstance()
+    camera = UsbCamera(config.name, config.path)
+    camera_server = inst.startAutomaticCapture(
+        camera=camera, return_server=True)
+
+    camera.setConfigJson(json.dumps(config.config))
+    camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
+
+    if config.stream_config is not None:
+        camera_server.setConfigJson(json.dumps(config.stream_config))
+
+    return camera
+
+
+def parseDimensions(camera_config):
+    """
+    Parse the width and height of the camera.
+    """
+
+    width = None
+    height = None
+    try:
+        width = camera_config.config["width"]
+        height = camera_config.config["height"]
+    except KeyError:
+        parseError("Could not read width/height")
+
+    return (width, height)
+
+
+def startOutputSource(camera_config):
+    """
+    Create an output source and server to ouput custom frames.
+    """
+
+    (width, height) = parseDimensions(camera_config)
+
+    inst = CameraServer.getInstance()
+    sink = inst.addServer(name="grip", port=1182)
+    cv_source = inst.putVideo("grip", width, height)
+    sink.setSource(cv_source)
+
+    return cv_source
+
+
+def readFrame(camera):
+    """
+    Reads the latest frame from the camera server instance to pass to opencv.
+    :param camera: The camera to read from
+    :return: The latest frame
+    """
+
+    inst = CameraServer.getInstance()
+    cv_sink = inst.getVideo(camera=camera)
+
+    (frame_time, frame) = cv_sink.grabFrame(None)
+
+    return frame
+
+def distance_to_camera(knownWidth, focalLength, length):
+
+    return knownWidth * focalLength / length
+
+def processFrame(frame, pipeline):
     """
     Performs extra processing on the pipeline's outputs and publishes data to NetworkTables.
     :param pipeline: The pipeline that just processed an image
     :return: None
     """
+
+    pipeline.process(frame)
 
     contour_x_positions = []
     contour_y_positions = []
@@ -44,92 +259,116 @@ def publish_contours(pipeline):
 
     # Calculate the distance from the camera to the tape
     distance = -1
-    table = NetworkTables.getTable(VISION_TABLE)
+    center_x = -1
+    center_y = -1
+    #table = table.getTable(VISION_TABLE)
 
     if (len(contour_x_positions) == 2 and len(contour_y_positions) == 2):
 
-        angle = NetworkTables.getEntry('angle')
+        center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
+        center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
+
+        #angle = table.getEntry('angle')
+        height = 14.5
+        angle = 68
         KNOWN_DISTANCE = 43.5
         KNOWN_WIDTH = 11.3104 * sin(angle)
         focalLength = KNOWN_DISTANCE * 82 / KNOWN_WIDTH
-        length = contour_x_positions[1] - contour_x_positions[0]
-        distance = distance_to_camera(KNOWN_WIDTH, focalLength, length)
-        
-        return distance
+        length = sqrt((contour_x_positions[0] - contour_x_positions[1])**2 + (contour_y_positions[0] - contour_y_positions[1])**2)
+        distance_from_camera = distance_to_camera(KNOWN_WIDTH, focalLength, length)
+        distance = sqrt(distance_from_camera ** 2 - height ** 2)
 
+    print('DISTANCE FROM CAMERA : ' + str(distance))
+    return (center_x, center_y)
 
-def connect():
+def publishValues(center_x, center_y):
     """
-    Connects to video stream and Network Tables.  Returns the video stream caputure.
-    :return: capture
-    """
-
-    # Wait for connection to RoboRIO and video stream
-    connected = False
-    while not connected:
-        try:
-            # Initialize Network Tables - Address of RoboRIO
-            print('\nConnecting to Network Tables...')
-            NetworkTables.initialize(server=ROBORIO_IP)
-
-            # Initialize Video Capture
-            print('\nConnecting to Video Stream...')
-
-            # USB Camera - Port of camera starting at 0
-            capture = cv2.VideoCapture(0)
-
-            # IP Camera - Address of video stream
-            # capture = cv2.VideoCapture(VIDEO_STREAM_URL)
-
-            connected = capture.isOpened()
-        except:
-            connected = False
-
-    print('\nConneted to Video Stream')
-
-    return capture
-
-
-def processStream(pipeline, capture):
-    """
-    Processes each frame of the video capture while the video stream is open.
-    :param pipeline: The GRIP generated pipeline
-    :param capture: The video stream capture
-    :return: None
+    Publish coordinates/values to the 'vision' network table.
     """
 
-    # Loop while the video stream is open
-    while capture.isOpened():
+    table = NetworkTables.getTable(VISION_TABLE)
+    table.putValue(CENTER_X, center_x)
+    table.putValue(CENTER_Y, center_y)
+
+    if (ENABLE_DEBUG):
+        print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
+
+
+def writeFrame(cv_source, frame, x, y):
+    """
+    Draw crosshairs on the target and put the frame in the output stream.
+    """
+
+    if (x >= 0 and y >= 0):
+        cv2.drawMarker(
+            img=frame,
+            position=(int(x), int(y)),
+            color=(0, 0, 255),
+            markerSize=40,
+            thickness=3)
+
+    cv_source.putFrame(frame)
+
+
+def processVision(camera, pipeline, cv_source):
+    """
+    Read the latest frame and process using the Grip Pipeline.
+    """
+
+    if (camera is not None):
         start = time.time()
-        have_frame, frame = capture.read()
 
-        # Process the image and publish to network table
-        if have_frame:
-            pipeline.process(frame)
-            publish_contours(pipeline)
+        frame = readFrame(camera)
+        if (frame is not None):
+            (x, y) = processFrame(frame, pipeline)
 
-            end = time.time()
-            print('elapsed: ' + str(end - start) + '\n')
+            publishValues(x, y)
+
+            if (ENABLE_CUSTOM_OUTPUT):
+                writeFrame(cv_source, frame, x, y)
+
+        end = time.time()
+
+        if (ENABLE_DEBUG):
+            print('Frame process time: ' + str(end - start) + ' s\n')
 
 
 def main():
+    global config_file
 
-    # Initialize pipeline from genereated GRIP code
+    if len(sys.argv) >= 2:
+        config_file = sys.argv[1]
+
+    # Read configuration
+    read = readConfig()
+    if not read:
+        sys.exit(1)
+
+    # Start NetworkTables
+    startNetworkTables()
+
+    # Start camera
+    camera = None
+    camera_config = None
+    if (len(camera_configs) >= 1):
+        camera_config = camera_configs[0]
+        camera = startCamera(camera_config)
+        time.sleep(3)
+
+    # Start custom output stream
+    cv_source = None
+    if (ENABLE_CUSTOM_OUTPUT):
+        cv_source = startOutputSource(camera_config)
+
+    print("Running Grip Pipeline...")
+
+    # Initialize Grip Pipeline
     pipeline = GripPipeline()
-    loop = True
-    while loop:
-        capture = connect()
-        try:
-            processStream(pipeline, capture)
-        except KeyboardException:
-            loop = False
-        except Exception as e:
-            print('Error processing video stream.\n')
-            print(e)
 
-        capture.release()
-        print('Disconnected from video stream.\n')
+    # Loop forever
+    while True:
+        processVision(camera, pipeline, cv_source)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
