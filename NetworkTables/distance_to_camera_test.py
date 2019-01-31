@@ -45,10 +45,14 @@ ENABLE_CUSTOM_OUTPUT = True
 ENABLE_DEBUG = False
 
 # Network Table constants
+SMARTDASHBOARD = "SmartDashboard"
 VISION_TABLE = "vision"
+ROBOT_POSE_X = "Drive/Robot X"
+ROBOT_POSE_Y = "Drive/Robot Y"
 CENTER_X = "centerX"
 CENTER_Y = "centerY"
-ANGLE = "angle"
+ANGLE = "Drive/Heading/"
+DISTANCE = "distance"
 
 # Camera config file
 config_file = "/boot/frc.json"
@@ -269,8 +273,8 @@ def processFrame(frame, pipeline):
         center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
 
         #angle = table.getEntry('angle')
-        height = 14.5
-        angle = 68
+        height = 23.25
+        angle = 70
         KNOWN_DISTANCE = 43.5
         KNOWN_WIDTH = 11.3104 * sin(angle)
         focalLength = KNOWN_DISTANCE * 82 / KNOWN_WIDTH
@@ -289,6 +293,7 @@ def publishValues(center_x, center_y):
     table = NetworkTables.getTable(VISION_TABLE)
     table.putValue(CENTER_X, center_x)
     table.putValue(CENTER_Y, center_y)
+    #table.putValue(DISTANCE, distance)
 
     if (ENABLE_DEBUG):
         print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
