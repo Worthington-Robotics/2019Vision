@@ -38,8 +38,11 @@ class CameraConfig:
     stream_config = None
 
 
+# Enable/Disable Raw Camera Output
+ENABLE_RAW_STREAM = False
+
 # Enable/Disable Custom Camera Output (i.e. crosshairs on target)
-ENABLE_CUSTOM_OUTPUT = True
+ENABLE_CUSTOM_STREAM = True
 
 # Enable Debug
 ENABLE_DEBUG = False
@@ -157,7 +160,7 @@ def startNetworkTables():
 
     ntinst = NetworkTablesInstance.getDefault()
     if server:
-        print("Setting up NetworkTables server")
+        print("Setting up NetworkTables server...")
         ntinst.startServer()
     else:
         print("Setting up NetworkTables client for team {}".format(team))
@@ -172,14 +175,19 @@ def startCamera(config):
     print("Starting camera '{}' on {}".format(config.name, config.path))
     inst = CameraServer.getInstance()
     camera = UsbCamera(config.name, config.path)
-    camera_server = inst.startAutomaticCapture(
-        camera=camera, return_server=True)
 
     camera.setConfigJson(json.dumps(config.config))
     camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
 
-    if config.stream_config is not None:
-        camera_server.setConfigJson(json.dumps(config.stream_config))
+    # Start automatic capture stream
+    if (ENABLE_RAW_STREAM):
+        print("Starting Custom Output Stream...")
+
+        camera_server = inst.startAutomaticCapture(
+            camera=camera, return_server=True)
+
+        if config.stream_config is not None:
+            camera_server.setConfigJson(json.dumps(config.stream_config))
 
     return camera
 
@@ -205,12 +213,12 @@ def startOutputSource(camera_config):
     Create an output source and server to ouput custom frames.
     """
 
+    print("Starting Custom Output Stream...")
+
     (width, height) = parseDimensions(camera_config)
 
     inst = CameraServer.getInstance()
-    sink = inst.addServer(name="grip", port=1182)
     cv_source = inst.putVideo("grip", width, height)
-    sink.setSource(cv_source)
 
     return cv_source
 
@@ -263,10 +271,6 @@ def processFrame(frame, pipeline):
         center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
         center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
 
-        distance = sqrt((contour_x_positions[0] - contour_x_positions[1])**2 + (contour_y_positions[0] - contour_y_positions[1])**2)
-
-    print('DISTANCE = ' + str(distance))
-
     return (center_x, center_y)
 
 
@@ -313,7 +317,7 @@ def processVision(camera, pipeline, cv_source):
 
             publishValues(x, y)
 
-            if (ENABLE_CUSTOM_OUTPUT):
+            if (ENABLE_CUSTOM_STREAM):
                 writeFrame(cv_source, frame, x, y)
 
         end = time.time()
@@ -346,7 +350,7 @@ def main():
 
     # Start custom output stream
     cv_source = None
-    if (ENABLE_CUSTOM_OUTPUT):
+    if (ENABLE_CUSTOM_STREAM):
         cv_source = startOutputSource(camera_config)
 
     print("Running Grip Pipeline...")
