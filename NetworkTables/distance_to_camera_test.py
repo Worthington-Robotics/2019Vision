@@ -18,7 +18,7 @@ Comments:    This script should be uploaded to the Raspberry Pi using the
 import json
 import time
 import sys
-from math import sqrt, sin
+from math import sqrt, sin, cos
 
 from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
 from networktables import NetworkTablesInstance, NetworkTables
@@ -51,8 +51,9 @@ ROBOT_POSE_X = "Drive/Robot X"
 ROBOT_POSE_Y = "Drive/Robot Y"
 CENTER_X = "centerX"
 CENTER_Y = "centerY"
-ANGLE = "Drive/Heading/"
-DISTANCE = "distance"
+ANGLE = "Drive/Heading"
+DX = "dx"
+DY = "dy"
 
 # Camera config file
 config_file = "/boot/frc.json"
@@ -265,6 +266,8 @@ def processFrame(frame, pipeline):
     distance = -1
     center_x = -1
     center_y = -1
+    dx = 0
+    dy = 0
     #table = table.getTable(VISION_TABLE)
 
     if (len(contour_x_positions) == 2 and len(contour_y_positions) == 2):
@@ -272,6 +275,7 @@ def processFrame(frame, pipeline):
         center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
         center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
 
+        #finds dx and dy of the coordinate 
         #angle = table.getEntry('angle')
         height = 23.25
         angle = 70
@@ -279,10 +283,20 @@ def processFrame(frame, pipeline):
         KNOWN_WIDTH = 11.3104 * sin(angle)
         focalLength = KNOWN_DISTANCE * 82 / KNOWN_WIDTH
         length = sqrt((contour_x_positions[0] - contour_x_positions[1])**2 + (contour_y_positions[0] - contour_y_positions[1])**2)
-        distance_from_camera = distance_to_camera(KNOWN_WIDTH, focalLength, length)
+        distanceFromCamera = distance_to_camera(KNOWN_WIDTH, focalLength, length)
         distance = sqrt(distance_from_camera ** 2 - height ** 2)
+        dx = distance * cos(angle)
+        dy = distance * sin(angle)
+
+        #finds theta of what the trajectory is
+        PIXEL_TARGET = 160.0
+        PIXEL_PER_DEGREE = 0.0
+        pixelOffset = center_x / PIXEL_TARGET
+        angleOffset = pixelOffset / PIXEL_PER_DEGREE
+        gyroValue = (angle + angleOffset + 180) % 360 
 
     print('DISTANCE FROM CAMERA : ' + str(distance))
+    print('GYRO OFFSET : ' + gyroValue)
     return (center_x, center_y)
 
 def publishValues(center_x, center_y):
