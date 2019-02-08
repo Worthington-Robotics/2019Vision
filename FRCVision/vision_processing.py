@@ -45,12 +45,16 @@ ENABLE_RAW_STREAM = False
 ENABLE_CUSTOM_STREAM = True
 
 # Enable Debug
-ENABLE_DEBUG = False
+ENABLE_DEBUG = True
+
+# Camera Field of View (Measured Empirically)
+CAMERA_FOV = 51.06
 
 # Network Table constants
 VISION_TABLE = "vision"
 CENTER_X = "centerX"
 CENTER_Y = "centerY"
+ANGLE_OFFSET = "angleOffset"
 
 # Camera config file
 config_file = "/boot/frc.json"
@@ -208,14 +212,12 @@ def parseDimensions(camera_config):
     return (width, height)
 
 
-def startOutputSource(camera_config):
+def startOutputSource(width, height):
     """
     Create an output source and server to ouput custom frames.
     """
 
     print("Starting Custom Output Stream...")
-
-    (width, height) = parseDimensions(camera_config)
 
     inst = CameraServer.getInstance()
     cv_source = inst.putVideo("grip", width, height)
@@ -265,7 +267,6 @@ def processFrame(frame, pipeline):
     # Calculate the midpoint between two contours
     center_x = -1
     center_y = -1
-    distance = -1
 
     if (len(contour_x_positions) == 2 and len(contour_y_positions) == 2):
         center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
@@ -274,7 +275,22 @@ def processFrame(frame, pipeline):
     return (center_x, center_y)
 
 
-def publishValues(center_x, center_y):
+def calculateAngleOffset(center_x, camera_width):
+    """
+    Calculates the angle offset.
+    (i.e. how much the robot should turn in order to face the target)
+    """
+
+    angle_offset = -1000
+
+    if (center_x >= 0):
+        pixel_offset = center_x - (camera_width / 2)
+        angle_offset = (CAMERA_FOV / camera_width) * pixel_offset
+
+    return angle_offset
+
+
+def publishValues(center_x, center_y, angle_offset):
     """
     Publish coordinates/values to the 'vision' network table.
     """
@@ -282,9 +298,11 @@ def publishValues(center_x, center_y):
     table = NetworkTables.getTable(VISION_TABLE)
     table.putValue(CENTER_X, center_x)
     table.putValue(CENTER_Y, center_y)
+    table.putValue(ANGLE_OFFSET, angle_offset)
 
     if (ENABLE_DEBUG):
-        print('center = (' + str(center_x) + ', ' + str(center_y) + ')')
+        print('Center = (' + str(center_x) + ', ' + str(center_y) + ')')
+        print('Angle Offset = ' + str(angle_offset))
 
 
 def writeFrame(cv_source, frame, x, y):
@@ -303,7 +321,7 @@ def writeFrame(cv_source, frame, x, y):
     cv_source.putFrame(frame)
 
 
-def processVision(camera, pipeline, cv_source):
+def processVision(camera, pipeline, cv_source, width):
     """
     Read the latest frame and process using the Grip Pipeline.
     """
@@ -315,7 +333,9 @@ def processVision(camera, pipeline, cv_source):
         if (frame is not None):
             (x, y) = processFrame(frame, pipeline)
 
-            publishValues(x, y)
+            angle_offset = calculateAngleOffset(x, width)
+
+            publishValues(x, y, angle_offset)
 
             if (ENABLE_CUSTOM_STREAM):
                 writeFrame(cv_source, frame, x, y)
@@ -343,15 +363,20 @@ def main():
     # Start camera
     camera = None
     camera_config = None
+    width = None
+    height = None
     if (len(camera_configs) >= 1):
         camera_config = camera_configs[0]
+        (width, height) = parseDimensions(camera_config)
+
         camera = startCamera(camera_config)
+
         time.sleep(3)
 
     # Start custom output stream
     cv_source = None
     if (ENABLE_CUSTOM_STREAM):
-        cv_source = startOutputSource(camera_config)
+        cv_source = startOutputSource(width, height)
 
     print("Running Grip Pipeline...")
 
@@ -360,7 +385,7 @@ def main():
 
     # Loop forever
     while True:
-        processVision(camera, pipeline, cv_source)
+        processVision(camera, pipeline, cv_source, width)
 
 
 if __name__ == "__main__":
