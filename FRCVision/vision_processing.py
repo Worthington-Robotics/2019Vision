@@ -45,13 +45,13 @@ ENABLE_RAW_STREAM = False
 ENABLE_CUSTOM_STREAM = True
 
 # Enable Debug
-ENABLE_DEBUG = True
+ENABLE_DEBUG = False
 
 # Camera Field of View (Measured Empirically)
 CAMERA_FOV = 51.06
 
 # Network Table constants
-VISION_TABLE = "vision"
+VISION_TABLE = "SmartDashboard/vision"
 CENTER_X = "centerX"
 CENTER_Y = "centerY"
 ANGLE_OFFSET = "angleOffset"
