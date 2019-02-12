@@ -3,14 +3,14 @@
 ----------------------------------------------------------------------------
 Authors:     FRC Team 4145
 
-Description: This script uses a generated GRIP pipeline to process a camera 
+Description: This script uses a generated GRIP pipeline to process a camera
              stream and publish results to NetworkTables.  This script is
              designed to work on the 2019 FRCVision Raspberry Pi image.
 
-Comments:    This script should be uploaded to the Raspberry Pi using the 
-             FRCVision web console.  Navigate to the "Application" tab and 
-             select the "Uploaded Python file" option.  The grip.py script 
-             should be manually uploaded to the /home/pi/ directory of the 
+Comments:    This script should be uploaded to the Raspberry Pi using the
+             FRCVision web console.  Navigate to the "Application" tab and
+             select the "Uploaded Python file" option.  The grip.py script
+             should be manually uploaded to the /home/pi/ directory of the
              Raspberry Pi.
 ----------------------------------------------------------------------------
 """
@@ -18,12 +18,13 @@ Comments:    This script should be uploaded to the Raspberry Pi using the
 import json
 import time
 import sys
-from math import sqrt
+from math import sqrt, degrees, atan
 
 from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
 from networktables import NetworkTablesInstance, NetworkTables
 
 import cv2
+import numpy as np
 from grip import GripPipeline
 
 
@@ -38,6 +39,14 @@ class CameraConfig:
     stream_config = None
 
 
+class ContourData:
+    def __init__(self, cx, cy, positive, box):
+        self.cx = cx
+        self.cy = cy
+        self.positive = positive
+        self.box = box
+
+
 # Enable/Disable Raw Camera Output
 ENABLE_RAW_STREAM = False
 
@@ -45,7 +54,7 @@ ENABLE_RAW_STREAM = False
 ENABLE_CUSTOM_STREAM = True
 
 # Enable Debug
-ENABLE_DEBUG = False
+ENABLE_DEBUG = True
 
 # Camera Field of View (Measured Empirically)
 CAMERA_FOV = 51.06
@@ -63,6 +72,8 @@ config_file = "/boot/frc.json"
 team = None
 server = False
 camera_configs = []
+parsed_width = None
+parsed_height = None
 
 
 def parseError(line):
@@ -240,7 +251,7 @@ def readFrame(camera):
     return frame
 
 
-def processFrame(frame, pipeline):
+def processFrame(frame, pipeline: GripPipeline):
     """
     Performs extra processing on the pipeline's outputs.
     :param pipeline: The pipeline that just processed an image
@@ -250,8 +261,20 @@ def processFrame(frame, pipeline):
     # Process the Grip Pipeline
     pipeline.process(frame)
 
-    contour_x_positions = []
-    contour_y_positions = []
+    # Populate data from contours
+    contour_data = calculateContourData(pipeline)
+
+    # Find the closest target
+    (center_x, center_y) = findClosestTarget(contour_data)
+
+    return (center_x, center_y, contour_data)
+
+
+def calculateContourData(pipeline):
+    """
+    Populate the various contour data used in future caluculations
+    """
+    contour_data = []
 
     # Find the bounding boxes of the contours to get x, y, width, and height
     for contour in pipeline.filter_contours_output:
@@ -261,31 +284,147 @@ def processFrame(frame, pipeline):
         moments = cv2.moments(contour)
         cx = int(moments['m10'] / moments['m00'])
         cy = int(moments['m01'] / moments['m00'])
-        contour_x_positions.append(cx)
-        contour_y_positions.append(cy)
 
-    # Calculate the midpoint between two contours
-    center_x = -1
-    center_y = -1
+        # Calculate if the slope of the contour edge is positive
+        (positive, box) = calculatePositive(contour)
 
-    if (len(contour_x_positions) == 2 and len(contour_y_positions) == 2):
-        center_x = (contour_x_positions[0] + contour_x_positions[1]) / 2.0
-        center_y = (contour_y_positions[0] + contour_y_positions[1]) / 2.0
+        contour_data.append(ContourData(cx, cy, positive, box))
+
+    if (ENABLE_DEBUG):
+        print('Found ' + str(len(contour_data)) + ' Contours')
+
+    return contour_data
+
+
+def calculatePositive(contour):
+    """
+    Calculate if the contour has a positive or negative slope
+    """
+
+    # Calculate the 4 corners of the contour
+    rect = cv2.minAreaRect(contour)
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
+
+    # Sort points by x coordinate ascending
+    sorted_pts = sorted(box, key=lambda pt: pt[1])
+    # if (ENABLE_DEBUG):
+    # for pt in sorted_pts:
+    #    print('pt: (' + str(pt[0]) + ', ' + str(pt[1]) + ')')
+
+    """
+    Find first top and third lowest point
+
+       (x)               (x)
+            x         x
+                or
+   (x)                       (x)
+        x                 x
+    """
+    bottom = sorted_pts[0]
+    top = sorted_pts[2]
+
+    # Find the slope of the first contour edge
+    denom = (top[0] - bottom[0])
+    slope = 0
+    if(denom != 0):
+        slope = (top[1] - bottom[1]) / denom
+
+    angle = degrees(atan(slope))
+
+    # This is because the y-axis is the top of the frame
+    positive = angle < 0
+
+    return (positive, [box])
+
+
+def findClosestTarget(contour_data):
+    """
+    Find the nearest pair of contours that look like: / \ 
+    (i.e. left positive slope, right negative slope)
+    """
+
+    contour_data.sort(key=lambda c: c.cx)
+
+    # Find all pairs
+    pairs = findPairs(contour_data)
+
+    if (ENABLE_DEBUG):
+        print('Found ' + str(len(pairs)) + ' Pairs')
+
+    # Find closest pair
+    (center_x, center_y) = findClosestPair(pairs)
 
     return (center_x, center_y)
 
 
-def calculateAngleOffset(center_x, camera_width):
+def findPairs(contour_data):
+    """
+    Find all pairs of contours that look like: / \ 
+    """
+
+    pairs = []
+
+    index = 0
+    size = len(contour_data)
+    done = False
+    while(not done and index < size):
+        if (index + 1 < size):
+            if (contour_data[index].positive and (not contour_data[index + 1].positive)):
+                pairs.append((contour_data[index], contour_data[index+1]))
+                index += 1
+
+            index += 1
+        else:
+            done = True
+
+    return pairs
+
+
+def findClosestPair(pairs):
+    """
+    Find the pair of contours closest to the center of the camera
+    """
+    global parsed_width
+    camera_center = parsed_width / 2
+
+    closest = None
+    (closest_x, closest_y) = (-1, -1)
+
+    for (left, right) in pairs:
+        (center_x, center_y) = calculateCenter(left, right)
+        distance = abs(center_x - camera_center)
+
+        if (closest is None or distance < closest):
+            closest = distance
+            (closest_x, closest_y) = (center_x, center_y)
+
+    return (closest_x, closest_y)
+
+
+def calculateCenter(contour_data1: ContourData, contour_data2: ContourData):
+    """
+    Calculate the midpoint between two contours
+    """
+
+    center_x = (contour_data1.cx + contour_data2.cx) / 2.0
+    center_y = (contour_data2.cy + contour_data2.cy) / 2.0
+
+    return (center_x, center_y)
+
+
+def calculateAngleOffset(center_x):
     """
     Calculates the angle offset.
     (i.e. how much the robot should turn in order to face the target)
     """
 
+    global parsed_width
     angle_offset = -1000
 
     if (center_x >= 0):
-        pixel_offset = center_x - (camera_width / 2)
-        angle_offset = (CAMERA_FOV / camera_width) * pixel_offset
+        pixel_offset = center_x - (parsed_width / 2)
+        angle_offset = (CAMERA_FOV / parsed_width) * pixel_offset
 
     return angle_offset
 
@@ -301,11 +440,11 @@ def publishValues(center_x, center_y, angle_offset):
     table.putValue(ANGLE_OFFSET, angle_offset)
 
     if (ENABLE_DEBUG):
-        print('Center = (' + str(center_x) + ', ' + str(center_y) + ')')
-        print('Angle Offset = ' + str(angle_offset))
+        print('Center: (' + str(center_x) + ', ' + str(center_y) + ')')
+        print('Angle Offset: ' + str(angle_offset))
 
 
-def writeFrame(cv_source, frame, x, y):
+def writeFrame(cv_source, frame, x, y, contour_data):
     """
     Draw crosshairs on the target and put the frame in the output stream.
     """
@@ -318,10 +457,13 @@ def writeFrame(cv_source, frame, x, y):
             markerSize=40,
             thickness=3)
 
+    for contour in contour_data:
+        cv2.drawContours(frame, contour.box, -1, (255, 0, 0), 2)
+
     cv_source.putFrame(frame)
 
 
-def processVision(camera, pipeline, cv_source, width):
+def processVision(camera, pipeline: GripPipeline, cv_source):
     """
     Read the latest frame and process using the Grip Pipeline.
     """
@@ -331,14 +473,14 @@ def processVision(camera, pipeline, cv_source, width):
 
         frame = readFrame(camera)
         if (frame is not None):
-            (x, y) = processFrame(frame, pipeline)
+            (x, y, contour_data) = processFrame(frame, pipeline)
 
-            angle_offset = calculateAngleOffset(x, width)
+            angle_offset = calculateAngleOffset(x)
 
             publishValues(x, y, angle_offset)
 
             if (ENABLE_CUSTOM_STREAM):
-                writeFrame(cv_source, frame, x, y)
+                writeFrame(cv_source, frame, x, y, contour_data)
 
         end = time.time()
 
@@ -348,6 +490,8 @@ def processVision(camera, pipeline, cv_source, width):
 
 def main():
     global config_file
+    global parsed_width
+    global parsed_height
 
     if len(sys.argv) >= 2:
         config_file = sys.argv[1]
@@ -363,11 +507,9 @@ def main():
     # Start camera
     camera = None
     camera_config = None
-    width = None
-    height = None
     if (len(camera_configs) >= 1):
         camera_config = camera_configs[0]
-        (width, height) = parseDimensions(camera_config)
+        (parsed_width, parsed_height) = parseDimensions(camera_config)
 
         camera = startCamera(camera_config)
 
@@ -376,7 +518,7 @@ def main():
     # Start custom output stream
     cv_source = None
     if (ENABLE_CUSTOM_STREAM):
-        cv_source = startOutputSource(width, height)
+        cv_source = startOutputSource(parsed_width, parsed_height)
 
     print("Running Grip Pipeline...")
 
@@ -385,7 +527,7 @@ def main():
 
     # Loop forever
     while True:
-        processVision(camera, pipeline, cv_source, width)
+        processVision(camera, pipeline, cv_source)
 
 
 if __name__ == "__main__":
