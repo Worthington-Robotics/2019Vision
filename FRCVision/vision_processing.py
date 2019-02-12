@@ -40,11 +40,15 @@ class CameraConfig:
 
 
 class ContourData:
-    def __init__(self, cx, cy, positive, box):
+    def __init__(self, cx, cy, box, left):
+        # X coordinate of the contour center
         self.cx = cx
+        # Y coordinate of the contour center
         self.cy = cy
-        self.positive = positive
+        # Minimum containing box of contour
         self.box = box
+        # If the contour is a left or right contour
+        self.left = left
 
 
 # Enable/Disable Raw Camera Output
@@ -272,7 +276,7 @@ def processFrame(frame, pipeline: GripPipeline):
 
 def calculateContourData(pipeline):
     """
-    Populate the various contour data used in future caluculations
+    Populate the various contour data used in future caluculations.
     """
     contour_data = []
 
@@ -286,9 +290,9 @@ def calculateContourData(pipeline):
         cy = int(moments['m01'] / moments['m00'])
 
         # Calculate if the slope of the contour edge is positive
-        (positive, box) = calculatePositive(contour)
+        (box, left) = calculateBoxAndSide(contour)
 
-        contour_data.append(ContourData(cx, cy, positive, box))
+        contour_data.append(ContourData(cx, cy, box, left))
 
     if (ENABLE_DEBUG):
         print('Found ' + str(len(contour_data)) + ' Contours')
@@ -296,9 +300,10 @@ def calculateContourData(pipeline):
     return contour_data
 
 
-def calculatePositive(contour):
+def calculateBoxAndSide(contour):
     """
-    Calculate if the contour has a positive or negative slope
+    Calculate the minimum containing box of the contour and determine the side of the pair.
+    (i.e. whether the contour is the left or right side of the target)
     """
 
     # Calculate the 4 corners of the contour
@@ -308,12 +313,9 @@ def calculatePositive(contour):
 
     # Sort points by x coordinate ascending
     sorted_pts = sorted(box, key=lambda pt: pt[1])
-    # if (ENABLE_DEBUG):
-    # for pt in sorted_pts:
-    #    print('pt: (' + str(pt[0]) + ', ' + str(pt[1]) + ')')
 
     """
-    Find first top and third lowest point
+    Find first and third point from the top down (y-axis is the top of the frame)
 
        (x)               (x)
             x         x
@@ -333,15 +335,14 @@ def calculatePositive(contour):
     angle = degrees(atan(slope))
 
     # This is because the y-axis is the top of the frame
-    positive = angle < 0
+    left = angle < 0
 
-    return (positive, [box])
+    return ([box], left)
 
 
 def findClosestTarget(contour_data):
     """
     Find the nearest pair of contours that look like: / \ 
-    (i.e. left positive slope, right negative slope)
     """
 
     contour_data.sort(key=lambda c: c.cx)
@@ -370,7 +371,9 @@ def findPairs(contour_data):
     done = False
     while(not done and index < size):
         if (index + 1 < size):
-            if (contour_data[index].positive and (not contour_data[index + 1].positive)):
+
+            # If the current contour is left and the next is right, then pair found
+            if (contour_data[index].left and (not contour_data[index + 1].left)):
                 pairs.append((contour_data[index], contour_data[index+1]))
                 index += 1
 
@@ -383,7 +386,7 @@ def findPairs(contour_data):
 
 def findClosestPair(pairs):
     """
-    Find the pair of contours closest to the center of the camera
+    Find the pair of contours closest to the center of the camera.
     """
     global parsed_width
     camera_center = parsed_width / 2
@@ -404,7 +407,7 @@ def findClosestPair(pairs):
 
 def calculateCenter(contour_data1: ContourData, contour_data2: ContourData):
     """
-    Calculate the midpoint between two contours
+    Calculate the midpoint between two contours.
     """
 
     center_x = (contour_data1.cx + contour_data2.cx) / 2.0
@@ -449,6 +452,11 @@ def writeFrame(cv_source, frame, x, y, contour_data):
     Draw crosshairs on the target and put the frame in the output stream.
     """
 
+    # Draw blue border surrounding contours
+    for contour in contour_data:
+        cv2.drawContours(frame, contour.box, -1, (255, 0, 0), 2)
+
+    # Draw red crosshairs on target
     if (x >= 0 and y >= 0):
         cv2.drawMarker(
             img=frame,
@@ -456,9 +464,6 @@ def writeFrame(cv_source, frame, x, y, contour_data):
             color=(0, 0, 255),
             markerSize=40,
             thickness=3)
-
-    for contour in contour_data:
-        cv2.drawContours(frame, contour.box, -1, (255, 0, 0), 2)
 
     cv_source.putFrame(frame)
 
@@ -512,7 +517,6 @@ def main():
         (parsed_width, parsed_height) = parseDimensions(camera_config)
 
         camera = startCamera(camera_config)
-
         time.sleep(3)
 
     # Start custom output stream
