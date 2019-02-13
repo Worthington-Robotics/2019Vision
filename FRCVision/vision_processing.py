@@ -58,7 +58,7 @@ ENABLE_RAW_STREAM = False
 ENABLE_CUSTOM_STREAM = True
 
 # Enable Debug
-ENABLE_DEBUG = True
+ENABLE_DEBUG = False
 
 # Camera Field of View (Measured Empirically)
 CAMERA_FOV = 51.06
@@ -426,7 +426,7 @@ def calculateAngleOffset(center_x):
     angle_offset = -1000
 
     if (center_x >= 0):
-        pixel_offset = center_x - (parsed_width / 2)
+        pixel_offset = (parsed_width / 2) - center_x 
         angle_offset = (CAMERA_FOV / parsed_width) * pixel_offset
 
     return angle_offset
