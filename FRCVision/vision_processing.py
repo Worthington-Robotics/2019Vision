@@ -184,6 +184,11 @@ def startNetworkTables():
     else:
         print("Setting up NetworkTables client for team {}".format(team))
         ntinst.startClientTeam(team)
+        connected = False
+        while (not connected):
+            time.sleep(1)
+            connected = ntinst.isConnected()
+            print("NetworkTables Connected: " + str(connected))
 
 
 def startCamera(config):
@@ -426,7 +431,7 @@ def calculateAngleOffset(center_x):
     angle_offset = -1000
 
     if (center_x >= 0):
-        pixel_offset = (parsed_width / 2) - center_x 
+        pixel_offset = (parsed_width / 2) - center_x
         angle_offset = (CAMERA_FOV / parsed_width) * pixel_offset
 
     return angle_offset
