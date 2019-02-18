@@ -517,6 +517,7 @@ def main():
         (parsed_width, parsed_height) = parseDimensions(camera_config)
 
         camera = startCamera(camera_config)
+        camera = startCamera(camera_configs[1]])
         time.sleep(3)
 
     # Start custom output stream
@@ -528,11 +529,16 @@ def main():
 
     # Initialize Grip Pipeline
     pipeline = GripPipeline()
-
+    camSwitch = NetworkTables.getTable("/CameraPublisher")
     # Loop forever
     while True:
         processVision(camera, pipeline, cv_source)
-
+        
+        if NetworkTables.getInstance("Drive/Vision/camSource", "Front"):
+            camSwitch.putString("selected", "Front") 
+            
+        if NetworkTables.getInstance("Drive/Vision/camSource", "Back"):
+            camSwitch.putString("selected", "Back")
 
 if __name__ == "__main__":
     main()
