@@ -522,7 +522,7 @@ def main():
         (parsed_width, parsed_height) = parseDimensions(camera_config)
 
         camera = startCamera(camera_config)
-        startCamera(camera_configs[1]])
+        startCamera(camera_configs[1])
         startCamera(camera_configs[2])
         time.sleep(3)
 
