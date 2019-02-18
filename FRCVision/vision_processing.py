@@ -522,7 +522,8 @@ def main():
         (parsed_width, parsed_height) = parseDimensions(camera_config)
 
         camera = startCamera(camera_config)
-        camera = startCamera(camera_configs[1]])
+        startCamera(camera_configs[1]])
+        startCamera(camera_configs[2])
         time.sleep(3)
 
     # Start custom output stream
@@ -538,7 +539,7 @@ def main():
     # Loop forever
     while True:
         processVision(camera, pipeline, cv_source)
-        
+
         if NetworkTables.getInstance("Drive/Vision/camSource", "Front"):
             camSwitch.putString("selected", "Front") 
             
