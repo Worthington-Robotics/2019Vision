@@ -191,7 +191,7 @@ def startNetworkTables():
             print("NetworkTables Connected: " + str(connected))
 
 
-def startCamera(config):
+def startCamera(config, force_enable=False):
     """
     Start running the camera.
     """
@@ -204,8 +204,8 @@ def startCamera(config):
     camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
 
     # Start automatic capture stream
-    if (ENABLE_RAW_STREAM):
-        print("Starting Custom Output Stream...")
+    if (ENABLE_RAW_STREAM or force_enable):
+        print("Starting Raw Output Stream...")
 
         camera_server = inst.startAutomaticCapture(
             camera=camera, return_server=True)
@@ -514,20 +514,27 @@ def main():
     # Start NetworkTables
     startNetworkTables()
 
-    # Start camera
+    # Start camera(s)
     camera = None
     camera_config = None
-    if (len(camera_configs) >= 1):
+    cv_source = None
+    if (len(camera_configs) > 0):
+
+        # Start vision camera
         camera_config = camera_configs[0]
         (parsed_width, parsed_height) = parseDimensions(camera_config)
-
         camera = startCamera(camera_config)
-        time.sleep(3)
+        time.sleep(1)
 
-    # Start custom output stream
-    cv_source = None
-    if (ENABLE_CUSTOM_STREAM):
-        cv_source = startOutputSource(parsed_width, parsed_height)
+        # Start custom output stream
+        if (ENABLE_CUSTOM_STREAM):
+            cv_source = startOutputSource(parsed_width, parsed_height)
+
+        # Start streaming cameras
+        if (len(camera_configs) > 1):
+            for i in range(1, len(camera_configs)):
+                startCamera(camera_configs[i], True)
+                time.sleep(1)
 
     print("Running Grip Pipeline...")
 
