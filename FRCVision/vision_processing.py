@@ -512,7 +512,7 @@ def main():
         sys.exit(1)
 
     # Start NetworkTables
-    startNetworkTables()
+    #startNetworkTables()
 
     # Start camera
     camera = None
@@ -536,16 +536,16 @@ def main():
     # Initialize Grip Pipeline
     pipeline = GripPipeline()
     camSwitch = NetworkTables.getTable("/CameraPublisher")
-    sd = NetworkTables.getTable("Smartdashboard")
     # Loop forever
     while True:
         processVision(camera, pipeline, cv_source)
-
-        if sd.getString("Drive/Vision/camSource", "N/A") == "Front":
+        """
+        if NetworkTables.getInstance("Drive/Vision/camSource", "Front"):
             camSwitch.putString("selected", "Front") 
             
-        if sd.getString("Drive/Vision/camSource", "N/A") == "Back":
+        if NetworkTables.get("Drive/Vision/camSource", "Back"):
             camSwitch.putString("selected", "Back")
+        """
 
 if __name__ == "__main__":
     main()
