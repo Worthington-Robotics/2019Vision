@@ -536,16 +536,19 @@ def main():
     # Initialize Grip Pipeline
     pipeline = GripPipeline()
     camSwitch = NetworkTables.getTable("/CameraPublisher")
+    sd = NetworkTables.getTable("Smartdashboard")
+
     # Loop forever
     while True:
         processVision(camera, pipeline, cv_source)
-        """
-        if NetworkTables.getInstance("Drive/Vision/camSource", "Front"):
-            camSwitch.putString("selected", "Front") 
+
+        if sd.getString("Drive/Vision/camSource", "N/A") == "Front":
+			parseDimensions(camera_configs[1] = (parsed_width1, parsed_height1)
+            CameraServer.getInstance().putVideo("Drive", parsed_width1, parsed_height1)
             
-        if NetworkTables.get("Drive/Vision/camSource", "Back"):
-            camSwitch.putString("selected", "Back")
-        """
+        if sd.getString("Drive/Vision/camSource", "N/A") == "Back":
+            parseDimensions(camera_configs[2] = (parsed_width1, parsed_height1)
+            CameraServer.getInstance().putVideo("Drive", parsed_width1, parsed_height1)
 
 if __name__ == "__main__":
     main()
