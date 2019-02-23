@@ -17,8 +17,11 @@ Comments:    This script should be uploaded to the Raspberry Pi using the
 
 import json
 import time
+import datetime
 import sys
 from math import sqrt, degrees, atan
+import subprocess
+import os
 
 from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
 from networktables import NetworkTablesInstance, NetworkTables
@@ -51,6 +54,14 @@ class ContourData:
         self.left = left
 
 
+# Enable/Disable saving of images
+ENABLE_IMAGE_SAVE = True
+
+IMAGE_DIR = "/media/usb0/images"
+today_dir = None
+FRAME_INTERVAL = 25
+frame_index = 0
+
 # Enable/Disable Raw Camera Output
 ENABLE_RAW_STREAM = False
 
@@ -78,6 +89,63 @@ server = False
 camera_configs = []
 parsed_width = None
 parsed_height = None
+
+
+def startUsbDrive():
+    """
+    Mount USB drive and create the images folder
+    """
+    global today_dir
+
+    # Mount the USB drive to /media/usb0/ -o uid=pi,gid=pi
+    output = execute(["sudo", "mount", "-o", "uid=pi,gid=pi",
+                      "/dev/sda1", "/media/usb0"])
+    for out in output:
+        print(out, end="")
+
+    is_mount = os.path.ismount("/media/usb0")
+    if (is_mount):
+        # Create the images folder
+        is_dir = os.path.isdir(IMAGE_DIR)
+        if (not is_dir):
+            makeDirectory(IMAGE_DIR)
+
+        # Create the folder for the current day
+        now = datetime.datetime.now()
+        today_dir = IMAGE_DIR + "/" + now.strftime("%Y-%m-%d")
+        is_dir = os.path.isdir(today_dir)
+        if (not is_dir):
+            makeDirectory(today_dir)
+
+
+def execute(cmd):
+    """
+    Execute a shell command on the pi and continuously yield the output
+    """
+
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                             universal_newlines=True)
+    for stdout_line in iter(popen.stdout.readline, ""):
+        yield stdout_line
+    popen.stdout.close()
+
+    return_code = popen.wait()
+
+    if return_code:
+        yield ("Execute Return Code: " + str(return_code) + "\n")
+
+
+def makeDirectory(dir_path):
+    # Create the images folder
+    print("Creating Directory: " + dir_path)
+    output = execute(["sudo", "mkdir", dir_path])
+    for out in output:
+        print(out, end="")
+
+    # Update permissions
+    output = execute(["sudo", "chmod", "777", dir_path])
+    for out in output:
+        print(out, end="")
 
 
 def parseError(line):
@@ -347,7 +415,7 @@ def calculateBoxAndSide(contour):
 
 def findClosestTarget(contour_data):
     """
-    Find the nearest pair of contours that look like: / \ 
+    Find the nearest pair of contours that look like: / \
     """
 
     contour_data.sort(key=lambda c: c.cx)
@@ -366,7 +434,7 @@ def findClosestTarget(contour_data):
 
 def findPairs(contour_data):
     """
-    Find all pairs of contours that look like: / \ 
+    Find all pairs of contours that look like: / \
     """
 
     pairs = []
@@ -457,6 +525,9 @@ def writeFrame(cv_source, frame, x, y, contour_data):
     Draw crosshairs on the target and put the frame in the output stream.
     """
 
+    if (ENABLE_IMAGE_SAVE):
+        saveFrame(frame)
+
     # Draw blue border surrounding contours
     for contour in contour_data:
         cv2.drawContours(frame, contour.box, -1, (255, 0, 0), 2)
@@ -471,6 +542,28 @@ def writeFrame(cv_source, frame, x, y, contour_data):
             thickness=3)
 
     cv_source.putFrame(frame)
+
+
+def saveFrame(frame):
+    """
+    Save the frame to the USB drive
+    """
+
+    global today_dir
+    global frame_index
+
+    if (today_dir != None and frame_index % FRAME_INTERVAL == 0):
+        now = datetime.datetime.now()
+        name = today_dir + "/" + now.strftime("%H-%M-%S") + ".jpeg"
+
+        write = cv2.imwrite(name, frame)
+        if (ENABLE_DEBUG):
+            print("Saving Frame: " + name)
+            print("Write: " + str(write))
+
+        frame_index = 0
+
+    frame_index += 1
 
 
 def processVision(camera, pipeline: GripPipeline, cv_source):
@@ -502,6 +595,9 @@ def main():
     global config_file
     global parsed_width
     global parsed_height
+
+    # Start the USB drive
+    startUsbDrive()
 
     if len(sys.argv) >= 2:
         config_file = sys.argv[1]
