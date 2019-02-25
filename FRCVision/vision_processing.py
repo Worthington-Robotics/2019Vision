@@ -259,6 +259,37 @@ def startNetworkTables():
             print("NetworkTables Connected: " + str(connected))
 
 
+def startCameras():
+    """
+    Start all connected cameras.
+    """
+
+    global parsed_width
+    global parsed_height
+
+    camera = None
+    cv_source = None
+    if (len(camera_configs) > 0):
+
+        # Start vision camera
+        camera_config = camera_configs[0]
+        (parsed_width, parsed_height) = parseDimensions(camera_config)
+        camera = startCamera(camera_config)
+        time.sleep(1)
+
+        # Start custom output stream
+        if (ENABLE_CUSTOM_STREAM):
+            cv_source = startOutputSource(parsed_width, parsed_height)
+
+        # Start streaming cameras
+        if (len(camera_configs) > 1):
+            for i in range(1, len(camera_configs)):
+                startCamera(camera_configs[i], True)
+                time.sleep(1)
+
+    return (camera, cv_source)
+
+
 def startCamera(config, force_enable=False):
     """
     Start running the camera.
@@ -528,20 +559,21 @@ def writeFrame(cv_source, frame, x, y, contour_data):
     if (ENABLE_IMAGE_SAVE):
         saveFrame(frame)
 
-    # Draw blue border surrounding contours
-    for contour in contour_data:
-        cv2.drawContours(frame, contour.box, -1, (255, 0, 0), 2)
+    if (ENABLE_CUSTOM_STREAM):
+        # Draw blue border surrounding contours
+        for contour in contour_data:
+            cv2.drawContours(frame, contour.box, -1, (255, 0, 0), 2)
 
-    # Draw red crosshairs on target
-    if (x >= 0 and y >= 0):
-        cv2.drawMarker(
-            img=frame,
-            position=(int(x), int(y)),
-            color=(0, 0, 255),
-            markerSize=40,
-            thickness=3)
+        # Draw red crosshairs on target
+        if (x >= 0 and y >= 0):
+            cv2.drawMarker(
+                img=frame,
+                position=(int(x), int(y)),
+                color=(0, 0, 255),
+                markerSize=40,
+                thickness=3)
 
-    cv_source.putFrame(frame)
+        cv_source.putFrame(frame)
 
 
 def saveFrame(frame):
@@ -582,8 +614,7 @@ def processVision(camera, pipeline: GripPipeline, cv_source):
 
             publishValues(x, y, angle_offset)
 
-            if (ENABLE_CUSTOM_STREAM):
-                writeFrame(cv_source, frame, x, y, contour_data)
+            writeFrame(cv_source, frame, x, y, contour_data)
 
         end = time.time()
 
@@ -593,16 +624,14 @@ def processVision(camera, pipeline: GripPipeline, cv_source):
 
 def main():
     global config_file
-    global parsed_width
-    global parsed_height
 
     # Start the USB drive
     startUsbDrive()
 
+    # Read configuration
     if len(sys.argv) >= 2:
         config_file = sys.argv[1]
 
-    # Read configuration
     read = readConfig()
     if not read:
         sys.exit(1)
@@ -611,33 +640,13 @@ def main():
     startNetworkTables()
 
     # Start camera(s)
-    camera = None
-    camera_config = None
-    cv_source = None
-    if (len(camera_configs) > 0):
-
-        # Start vision camera
-        camera_config = camera_configs[0]
-        (parsed_width, parsed_height) = parseDimensions(camera_config)
-        camera = startCamera(camera_config)
-        time.sleep(1)
-
-        # Start custom output stream
-        if (ENABLE_CUSTOM_STREAM):
-            cv_source = startOutputSource(parsed_width, parsed_height)
-
-        # Start streaming cameras
-        if (len(camera_configs) > 1):
-            for i in range(1, len(camera_configs)):
-                startCamera(camera_configs[i], True)
-                time.sleep(1)
-
-    print("Running Grip Pipeline...")
+    (camera, cv_source) = startCameras()
 
     # Initialize Grip Pipeline
+    print("Running Grip Pipeline...")
     pipeline = GripPipeline()
 
-    # Loop forever
+    # Continuously process vision pipeline
     while True:
         processVision(camera, pipeline, cv_source)
 
