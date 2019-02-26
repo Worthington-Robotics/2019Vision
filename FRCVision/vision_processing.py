@@ -57,7 +57,9 @@ class ContourData:
 # Enable/Disable saving of images
 ENABLE_IMAGE_SAVE = True
 
-IMAGE_DIR = "/media/usb0/images"
+USB_ROOT_PATH = "/dev/sda"
+USB_MOUNT_DIR = "/media/usb0"
+IMAGE_DIR = USB_MOUNT_DIR + "/images"
 today_dir = None
 FRAME_INTERVAL = 25
 frame_index = 0
@@ -97,25 +99,54 @@ def startUsbDrive():
     """
     global today_dir
 
-    # Mount the USB drive to /media/usb0/ -o uid=pi,gid=pi
-    output = execute(["sudo", "mount", "-o", "uid=pi,gid=pi",
-                      "/dev/sda1", "/media/usb0"])
-    for out in output:
-        print(out, end="")
+    # Create the mount point
+    is_dir = os.path.isdir(USB_MOUNT_DIR)
+    if (not is_dir):
+        makeDirectory(USB_MOUNT_DIR)
 
-    is_mount = os.path.ismount("/media/usb0")
-    if (is_mount):
-        # Create the images folder
-        is_dir = os.path.isdir(IMAGE_DIR)
-        if (not is_dir):
-            makeDirectory(IMAGE_DIR)
+    usb_path = getUsbPath()
+    if (usb_path is not None):
+        print('Mounting USB Device: ' + usb_path + ' to dir: ' + USB_MOUNT_DIR)
 
-        # Create the folder for the current day
-        now = datetime.datetime.now()
-        today_dir = IMAGE_DIR + "/" + now.strftime("%Y-%m-%d")
-        is_dir = os.path.isdir(today_dir)
-        if (not is_dir):
-            makeDirectory(today_dir)
+        # Mount the USB drive to /media/usb0/ -o uid=pi,gid=pi
+        output = execute(["sudo", "mount", "-o", "uid=pi,gid=pi",
+                          usb_path, USB_MOUNT_DIR])
+        for out in output:
+            print(out, end="")
+
+        is_mount = os.path.ismount(USB_MOUNT_DIR)
+        if (is_mount):
+            # Create the images folder
+            is_dir = os.path.isdir(IMAGE_DIR)
+            if (not is_dir):
+                makeDirectory(IMAGE_DIR)
+
+            # Create the folder for the current day
+            now = datetime.datetime.now()
+            today_dir = IMAGE_DIR + "/" + now.strftime("%Y-%m-%d")
+            is_dir = os.path.isdir(today_dir)
+            if (not is_dir):
+                makeDirectory(today_dir)
+    else:
+        print('No USB device found')
+
+
+def getUsbPath():
+    """
+    Get the path of the last USB drive inserted
+    """
+    usb_path = None
+
+    for i in range(0, 4):
+        path = USB_ROOT_PATH
+        if (i > 0):
+            path = path + str(i)
+
+        exists = os.path.exists(path)
+        if (exists):
+            usb_path = path
+
+    return usb_path
 
 
 def execute(cmd):
@@ -446,7 +477,7 @@ def calculateBoxAndSide(contour):
 
 def findClosestTarget(contour_data):
     """
-    Find the nearest pair of contours that look like: / \
+    Find the nearest pair of contours that look like: / \ 
     """
 
     contour_data.sort(key=lambda c: c.cx)
@@ -465,7 +496,7 @@ def findClosestTarget(contour_data):
 
 def findPairs(contour_data):
     """
-    Find all pairs of contours that look like: / \
+    Find all pairs of contours that look like: / \ 
     """
 
     pairs = []
