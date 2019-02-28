@@ -446,7 +446,7 @@ def calculateBoxAndSide(contour):
     box = cv2.boxPoints(rect)
     box = np.int0(box)
 
-    # Sort points by x coordinate ascending
+    # Sort points by y coordinate ascending
     sorted_pts = sorted(box, key=lambda pt: pt[1])
 
     """
@@ -480,8 +480,6 @@ def findClosestTarget(contour_data):
     Find the nearest pair of contours that look like: / \ 
     """
 
-    contour_data.sort(key=lambda c: c.cx)
-
     # Find all pairs
     pairs = findPairs(contour_data)
 
@@ -500,6 +498,9 @@ def findPairs(contour_data):
     """
 
     pairs = []
+
+    # Sort contours by center x coordinate ascending
+    contour_data.sort(key=lambda c: c.cx)
 
     index = 0
     size = len(contour_data)
