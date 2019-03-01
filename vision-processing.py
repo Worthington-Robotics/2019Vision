@@ -76,6 +76,9 @@ ENABLE_DEBUG = False
 # Camera Field of View (Measured Empirically)
 CAMERA_FOV = 51.06
 
+# Default Drive Camera Source
+DEFAULT_DRIVE = "Front"
+
 # Network Table constants
 VISION_TABLE = "SmartDashboard/vision"
 CENTER_X = "centerX"
@@ -298,32 +301,38 @@ def startCameras():
     global parsed_width
     global parsed_height
 
-    camera = None
+    vision_camera = None
     cv_source = None
     if (len(camera_configs) > 0):
 
         # Start vision camera
         camera_config = camera_configs[0]
         (parsed_width, parsed_height) = parseDimensions(camera_config)
-        camera = startCamera(camera_config)
+        vision_camera = startVisionCamera(camera_config)
         time.sleep(1)
 
         # Start custom output stream
         if (ENABLE_CUSTOM_STREAM):
             cv_source = startOutputSource(parsed_width, parsed_height)
 
+        # Start the switchable camera stream
+        inst = CameraServer.getInstance()
+        server = inst.addServer(name="Drive")
+
         # Start streaming cameras
-        if (len(camera_configs) > 1):
-            for i in range(1, len(camera_configs)):
-                startCamera(camera_configs[i], True)
-                time.sleep(1)
+        front_camera = None
+        back_camera = None
+        if (len(camera_configs) == 3):
+            front_camera = startDriveCamera(camera_configs[1])
+            back_camera = startDriveCamera(camera_configs[2])
+            server.setSource(front_camera)
 
-    return (camera, cv_source)
+    return (vision_camera, cv_source, server, front_camera, back_camera)
 
 
-def startCamera(config, force_enable=False):
+def startVisionCamera(config):
     """
-    Start running the camera.
+    Start running the vision camera.
     """
 
     print("Starting camera '{}' on {}".format(config.name, config.path))
@@ -334,7 +343,7 @@ def startCamera(config, force_enable=False):
     camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
 
     # Start automatic capture stream
-    if (ENABLE_RAW_STREAM or force_enable):
+    if (ENABLE_RAW_STREAM):
         print("Starting Raw Output Stream...")
 
         camera_server = inst.startAutomaticCapture(
@@ -344,6 +353,35 @@ def startCamera(config, force_enable=False):
             camera_server.setConfigJson(json.dumps(config.stream_config))
 
     return camera
+
+
+def startDriveCamera(config):
+    """
+    Start running a drive camera.
+    """
+
+    print("Starting camera '{}' on {}".format(config.name, config.path))
+    camera = UsbCamera("Drive", config.path)
+
+    camera.setConfigJson(json.dumps(config.config))
+    camera.setConnectionStrategy(VideoSource.ConnectionStrategy.kKeepOpen)
+
+    return camera
+
+
+def switchDriveCamera(server, front_camera, back_camera):
+    """
+    Switch the source of the drive camera
+    """
+
+    camera_selection = NetworkTables.getTable("SmartDashboard").getString("CameraSelection", DEFAULT_DRIVE)
+    current_camera = server.getName()
+
+    if (current_camera is None or current_camera != camera_selection):
+        if (camera_selection == "Front"):
+            server.setSource(front_camera)
+        elif (camera_selection == "Back"):
+            server.setSource(back_camera)
 
 
 def parseDimensions(camera_config):
@@ -672,7 +710,7 @@ def main():
     startNetworkTables()
 
     # Start camera(s)
-    (camera, cv_source) = startCameras()
+    (vision_camera, cv_source, server, front_camera, back_camera) = startCameras()
 
     # Initialize Grip Pipeline
     print("Running Grip Pipeline...")
@@ -680,7 +718,8 @@ def main():
 
     # Continuously process vision pipeline
     while True:
-        processVision(camera, pipeline, cv_source)
+        processVision(vision_camera, pipeline, cv_source)
+        switchDriveCamera(server, front_camera, back_camera)
 
 
 if __name__ == "__main__":
