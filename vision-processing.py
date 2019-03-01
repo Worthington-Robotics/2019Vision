@@ -80,7 +80,9 @@ CAMERA_FOV = 51.06
 DEFAULT_DRIVE = "Front"
 
 # Network Table constants
-VISION_TABLE = "SmartDashboard/vision"
+SMART_DASHBOARD = "SmartDashboard"
+VISION_TABLE = "vision"
+CAMERA_SELECTION = "CameraSelection"
 CENTER_X = "centerX"
 CENTER_Y = "centerY"
 ANGLE_OFFSET = "angleOffset"
@@ -337,8 +339,8 @@ def startCameras():
 
         # Setup camera switch listener
         ntinst = NetworkTablesInstance.getDefault()
-        table = ntinst.getTable("SmartDashboard")
-        table.addEntryListener(switchDriveCamera, key="CameraSelection", immediateNotify=True)
+        table = ntinst.getTable(SMART_DASHBOARD)
+        table.addEntryListener(switchDriveCamera, key=CAMERA_SELECTION, immediateNotify=True)
 
     return (vision_camera, cv_source)
 
@@ -626,7 +628,7 @@ def publishValues(center_x, center_y, angle_offset):
     """
 
     ntinst = NetworkTablesInstance.getDefault()
-    table = ntinst.getTable(VISION_TABLE)
+    table = ntinst.getTable(SMART_DASHBOARD).getSubTable(VISION_TABLE)
     table.putValue(CENTER_X, center_x)
     table.putValue(CENTER_Y, center_y)
     table.putValue(ANGLE_OFFSET, angle_offset)
