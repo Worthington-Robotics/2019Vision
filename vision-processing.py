@@ -85,6 +85,10 @@ CENTER_X = "centerX"
 CENTER_Y = "centerY"
 ANGLE_OFFSET = "angleOffset"
 
+server = None
+front_camera = None
+back_camera = None
+
 # Camera config file
 config_file = "/boot/frc.json"
 
@@ -286,6 +290,8 @@ def startNetworkTables():
     else:
         print("Setting up NetworkTables client for team {}".format(team))
         ntinst.startClientTeam(team)
+
+        # Wait for Network Tables to be connected
         connected = False
         while (not connected):
             time.sleep(1)
@@ -300,9 +306,13 @@ def startCameras():
 
     global parsed_width
     global parsed_height
+    global server
+    global front_camera
+    global back_camera
 
     vision_camera = None
     cv_source = None
+
     if (len(camera_configs) > 0):
 
         # Start vision camera
@@ -320,14 +330,17 @@ def startCameras():
         server = inst.addServer(name="Drive")
 
         # Start streaming cameras
-        front_camera = None
-        back_camera = None
         if (len(camera_configs) == 3):
             front_camera = startDriveCamera(camera_configs[1])
             back_camera = startDriveCamera(camera_configs[2])
             server.setSource(front_camera)
 
-    return (vision_camera, cv_source, server, front_camera, back_camera)
+        # Setup camera switch listener
+        ntinst = NetworkTablesInstance.getDefault()
+        table = ntinst.getTable("SmartDashboard")
+        table.addEntryListener(switchDriveCamera, key="CameraSelection", immediateNotify=True)
+
+    return (vision_camera, cv_source)
 
 
 def startVisionCamera(config):
@@ -369,20 +382,19 @@ def startDriveCamera(config):
     return camera
 
 
-def switchDriveCamera(server, front_camera, back_camera):
+def switchDriveCamera(source, key, value, is_new):
     """
     Switch the source of the drive camera
     """
 
-    ntinst = NetworkTablesInstance.getDefault()
-    table = ntinst.getTable("SmartDashboard")
-    camera_selection = table.getString("CameraSelection", DEFAULT_DRIVE)
-    current_camera = server.getName()
+    global server
+    global front_camera
+    global back_camera
 
-    if (current_camera is None or current_camera != camera_selection):
-        if (camera_selection == "Front"):
+    if (server is not None):
+        if (front_camera is not None and value == "Front"):
             server.setSource(front_camera)
-        elif (camera_selection == "Back"):
+        elif (back_camera is not None and value == "Back"):
             server.setSource(back_camera)
 
 
@@ -517,7 +529,7 @@ def calculateBoxAndSide(contour):
 
 def findClosestTarget(contour_data):
     """
-    Find the nearest pair of contours that look like: / \ 
+    Find the nearest pair of contours that look like: / \
     """
 
     # Find all pairs
@@ -534,7 +546,7 @@ def findClosestTarget(contour_data):
 
 def findPairs(contour_data):
     """
-    Find all pairs of contours that look like: / \ 
+    Find all pairs of contours that look like: / \
     """
 
     pairs = []
@@ -713,7 +725,7 @@ def main():
     startNetworkTables()
 
     # Start camera(s)
-    (vision_camera, cv_source, server, front_camera, back_camera) = startCameras()
+    (vision_camera, cv_source) = startCameras()
 
     # Initialize Grip Pipeline
     print("Running Grip Pipeline...")
@@ -722,7 +734,6 @@ def main():
     # Continuously process vision pipeline
     while True:
         processVision(vision_camera, pipeline, cv_source)
-        switchDriveCamera(server, front_camera, back_camera)
 
 
 if __name__ == "__main__":
