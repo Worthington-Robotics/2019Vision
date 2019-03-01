@@ -24,7 +24,7 @@ import subprocess
 import os
 
 from cscore import CameraServer, VideoSource, UsbCamera, MjpegServer
-from networktables import NetworkTablesInstance, NetworkTables
+from networktables import NetworkTablesInstance
 
 import cv2
 import numpy as np
@@ -374,7 +374,9 @@ def switchDriveCamera(server, front_camera, back_camera):
     Switch the source of the drive camera
     """
 
-    camera_selection = NetworkTables.getTable("SmartDashboard").getString("CameraSelection", DEFAULT_DRIVE)
+    ntinst = NetworkTablesInstance.getDefault()
+    table = ntinst.getTable("SmartDashboard")
+    camera_selection = table.getString("CameraSelection", DEFAULT_DRIVE)
     current_camera = server.getName()
 
     if (current_camera is None or current_camera != camera_selection):
@@ -611,7 +613,8 @@ def publishValues(center_x, center_y, angle_offset):
     Publish coordinates/values to the 'vision' network table.
     """
 
-    table = NetworkTables.getTable(VISION_TABLE)
+    ntinst = NetworkTablesInstance.getDefault()
+    table = ntinst.getTable(VISION_TABLE)
     table.putValue(CENTER_X, center_x)
     table.putValue(CENTER_Y, center_y)
     table.putValue(ANGLE_OFFSET, angle_offset)
