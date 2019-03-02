@@ -337,11 +337,6 @@ def startCameras():
             back_camera = startDriveCamera(camera_configs[2])
             server.setSource(front_camera)
 
-        # Setup camera switch listener
-        ntinst = NetworkTablesInstance.getDefault()
-        table = ntinst.getTable(SMART_DASHBOARD)
-        table.addEntryListener(switchDriveCamera, key=CAMERA_SELECTION, immediateNotify=True)
-
     return (vision_camera, cv_source)
 
 
@@ -384,7 +379,7 @@ def startDriveCamera(config):
     return camera
 
 
-def switchDriveCamera(source, key, value, is_new):
+def switchDriveCamera():
     """
     Switch the source of the drive camera
     """
@@ -392,6 +387,10 @@ def switchDriveCamera(source, key, value, is_new):
     global server
     global front_camera
     global back_camera
+
+    ntinst = NetworkTablesInstance.getDefault()
+    table = ntinst.getTable(SMART_DASHBOARD)
+    value = table.getString(CAMERA_SELECTION, "Front")
 
     if (server is not None):
         if (front_camera is not None and value == "Front"):
@@ -736,6 +735,7 @@ def main():
     # Continuously process vision pipeline
     while True:
         processVision(vision_camera, pipeline, cv_source)
+        switchDriveCamera()
 
 
 if __name__ == "__main__":
