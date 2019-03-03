@@ -76,17 +76,13 @@ ENABLE_DEBUG = False
 # Camera Field of View (Measured Empirically)
 CAMERA_FOV = 51.06
 
-# Default Drive Camera Source
-DEFAULT_DRIVE = "Front"
-
 # Network Table constants
 SMART_DASHBOARD = "SmartDashboard"
 VISION_TABLE = "vision"
 CAMERA_SELECTION = "CameraSelection"
-CENTER_X = "centerX"
-CENTER_Y = "centerY"
-ANGLE_OFFSET = "angleOffset"
+CONNECTION_STATUS = "connect"
 
+# Drive cameras
 server = None
 front_camera = None
 back_camera = None
@@ -285,20 +281,72 @@ def startNetworkTables():
     Connect to the Network Tables as a client or start the server locally.
     """
 
-    ntinst = NetworkTablesInstance.getDefault()
-    if server:
-        print("Setting up NetworkTables server...")
-        ntinst.startServer()
-    else:
-        print("Setting up NetworkTables client for team {}".format(team))
-        ntinst.startClientTeam(team)
+    retry_attempts = 5
 
-        # Wait for Network Tables to be connected
-        connected = False
-        while (not connected):
-            time.sleep(1)
-            connected = ntinst.isConnected()
-            print("NetworkTables Connected: " + str(connected))
+    ntinst = NetworkTablesInstance.getDefault()
+
+    print("Setting up NetworkTables client for team {}".format(team))
+    ntinst.startClientTeam(team)
+
+    # Wait for Network Tables to be connected
+    connected = False
+    attempt = 0
+    while (not connected and attempt < retry_attempts):
+        time.sleep(1)
+        connected = isConnectedToRobot(ntinst)
+        print("NetworkTables Connected: " + str(connected) + ", Attempt: " + str(attempt))
+        attempt += 1
+
+    if (not connected):
+        sys.exit("Connection to robot not established.  Restarting vision processing...")
+
+
+def isConnectedToRobot(ntinst):
+    """
+    This ensures that the Pi is properly connected to the Network Tables.
+    """
+
+    connected = False
+
+    # Read status from Network Tables
+    ntinst = NetworkTablesInstance.getDefault()
+    table = ntinst.getTable(SMART_DASHBOARD).getSubTable(VISION_TABLE)
+    value = table.getString(CONNECTION_STATUS, "NOT_INIT")
+    print("Connection Status: " + value)
+
+    # Restart the script when the RoboRio is first connected to the Network Tables
+    if (value == "PING"):
+        table.putString(CONNECTION_STATUS, "PONG")
+        ntinst.flush()
+        time.sleep(1)
+        sys.exit("Reconnecting to Network Tables...")
+
+    # Wait for the connection to be re-established
+    connected = waitForConnection(table)
+    if (connected):
+        table.putString(CONNECTION_STATUS, "RESET")
+
+    return connected
+
+
+def waitForConnection(table):
+    """
+    Wait for the connection status of CONNECTED from the Network Tables.
+    """
+
+    retry_attempts = 5
+
+    connected = False
+    attempt = 0
+    while (not connected and attempt < retry_attempts):
+        time.sleep(1)
+        value = table.getString(CONNECTION_STATUS, "NOT_INIT")
+        connected = (value == "CONNECTED")
+
+        print("Connection Status: " + str(value) + ", Attempt: " + str(attempt))
+        attempt += 1
+
+    return connected
 
 
 def startCameras():
@@ -379,6 +427,9 @@ def startDriveCamera(config):
     return camera
 
 
+last_selection = None
+
+
 def switchDriveCamera():
     """
     Switch the source of the drive camera
@@ -387,16 +438,22 @@ def switchDriveCamera():
     global server
     global front_camera
     global back_camera
+    global last_selection
 
     ntinst = NetworkTablesInstance.getDefault()
     table = ntinst.getTable(SMART_DASHBOARD)
     value = table.getString(CAMERA_SELECTION, "Front")
 
-    if (server is not None):
+    if (value != last_selection):
+        print("Switching Camera Source: " + str(value))
+
+    if (server is not None and value != last_selection):
         if (front_camera is not None and value == "Front"):
             server.setSource(front_camera)
         elif (back_camera is not None and value == "Back"):
             server.setSource(back_camera)
+
+    last_selection = value
 
 
 def parseDimensions(camera_config):
@@ -628,9 +685,10 @@ def publishValues(center_x, center_y, angle_offset):
 
     ntinst = NetworkTablesInstance.getDefault()
     table = ntinst.getTable(SMART_DASHBOARD).getSubTable(VISION_TABLE)
-    table.putValue(CENTER_X, center_x)
-    table.putValue(CENTER_Y, center_y)
-    table.putValue(ANGLE_OFFSET, angle_offset)
+
+    table.putValue("centerX", center_x)
+    table.putValue("centerY", center_y)
+    table.putValue("angleOffset", angle_offset)
 
     if (ENABLE_DEBUG):
         print('Center: (' + str(center_x) + ', ' + str(center_y) + ')')
@@ -717,6 +775,7 @@ def main():
     # Read configuration
     if len(sys.argv) >= 2:
         config_file = sys.argv[1]
+        print("Using argv config file: " + config_file)
 
     read = readConfig()
     if not read:
