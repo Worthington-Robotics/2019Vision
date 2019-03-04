@@ -4,7 +4,6 @@
     <style>
         .outer {
             width: 100%;
-            height: 90vh;
             display: flex;
             flex-direction: row;
         }
@@ -16,10 +15,6 @@
 
         }
 
-        .drive-img {
-            max-height: 95vh;
-        }
-
         .vision {
             flex: 1 1 40%;
             display: block;
@@ -28,6 +23,7 @@
 
         img {
             width: 100%;
+            max-height: calc(100vh - 32px);
         }
     </style>
 </head>
@@ -38,7 +34,7 @@
             <!-- Test Stream
             <img id="Drive" src="http://camera1.mairie-brest.fr/mjpg/video.mjpg?resolution=320x240"></img>
             -->
-            <img id="Drive" class="drive-img" src="http://frcvision.local:1182/stream.mjpg"></img>
+            <img id="Drive" src="http://frcvision.local:1182/stream.mjpg"></img>
         </div>
         <div class="vision">
             <!-- Test Stream
