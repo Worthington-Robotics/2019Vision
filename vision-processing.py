@@ -287,18 +287,23 @@ def startNetworkTables():
 
     print("Setting up NetworkTables client for team {}".format(team))
     ntinst.startClientTeam(team)
+    if server:
+        print("Setting up NetworkTables server...")
+        ntinst.startServer()
+    else:
+        # Wait for Network Tables to be connected
+        connected = False
+        attempt = 0
+        while (not connected and attempt < retry_attempts):
+            time.sleep(1)
+            connected = isConnectedToRobot(ntinst)
+            print("NetworkTables Connected: " +
+                  str(connected) + ", Attempt: " + str(attempt))
+            attempt += 1
 
-    # Wait for Network Tables to be connected
-    connected = False
-    attempt = 0
-    while (not connected and attempt < retry_attempts):
-        time.sleep(1)
-        connected = isConnectedToRobot(ntinst)
-        print("NetworkTables Connected: " + str(connected) + ", Attempt: " + str(attempt))
-        attempt += 1
-
-    if (not connected):
-        sys.exit("Connection to robot not established.  Restarting vision processing...")
+        if (not connected):
+            sys.exit(
+                "Connection to robot not established.  Restarting vision processing...")
 
 
 def isConnectedToRobot(ntinst):
@@ -380,10 +385,12 @@ def startCameras():
         server = inst.addServer(name="Drive")
 
         # Start streaming cameras
-        if (len(camera_configs) == 3):
+        if (len(camera_configs) >= 2):
             front_camera = startDriveCamera(camera_configs[1])
-            back_camera = startDriveCamera(camera_configs[2])
             server.setSource(front_camera)
+
+            if (len(camera_configs) == 3):
+                back_camera = startDriveCamera(camera_configs[2])
 
     return (vision_camera, cv_source)
 
