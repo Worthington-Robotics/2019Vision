@@ -538,13 +538,15 @@ def calculateContourData(pipeline):
         # https://docs.opencv.org/3.4.2/dd/d49/tutorial_py_contour_features.html
 
         moments = cv2.moments(contour)
-        cx = int(moments['m10'] / moments['m00'])
-        cy = int(moments['m01'] / moments['m00'])
+        m00 = moments['m00']
+        if (m00 != 0):
+            cx = int(moments['m10'] / m00)
+            cy = int(moments['m01'] / m00)
 
-        # Calculate if the slope of the contour edge is positive
-        (box, left) = calculateBoxAndSide(contour)
+            # Calculate if the slope of the contour edge is positive
+            (box, left) = calculateBoxAndSide(contour)
 
-        contour_data.append(ContourData(cx, cy, box, left))
+            contour_data.append(ContourData(cx, cy, box, left))
 
     if (ENABLE_DEBUG):
         print('Found ' + str(len(contour_data)) + ' Contours')
