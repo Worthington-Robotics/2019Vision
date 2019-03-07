@@ -514,11 +514,17 @@ def processFrame(frame, pipeline: GripPipeline):
     :return: The center coordinates of the target
     """
 
-    # Process the Grip Pipeline
-    pipeline.process(frame)
+    contour_data = []
 
-    # Populate data from contours
-    contour_data = calculateContourData(pipeline)
+    try:
+        # Process the Grip Pipeline
+        pipeline.process(frame)
+
+        # Populate data from contours
+        contour_data = calculateContourData(pipeline)
+
+    except (ZeroDivisionError):
+        print("Divide by 0 exception in GRIP Pipeline")
 
     # Find the closest target
     (center_x, center_y) = findClosestTarget(contour_data)
