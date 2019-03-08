@@ -132,6 +132,8 @@ def startUsbDrive():
             is_dir = os.path.isdir(today_dir)
             if (not is_dir):
                 makeDirectory(today_dir)
+            else:
+                print("Using Directory: " + today_dir)
     else:
         print('No USB device found')
 
@@ -165,10 +167,7 @@ def execute(cmd):
         yield stdout_line
     popen.stdout.close()
 
-    return_code = popen.wait()
-
-    if return_code:
-        yield ("Execute Return Code: " + str(return_code) + "\n")
+    popen.wait()
 
 
 def makeDirectory(dir_path):
@@ -285,12 +284,13 @@ def startNetworkTables():
 
     ntinst = NetworkTablesInstance.getDefault()
 
-    print("Setting up NetworkTables client for team {}".format(team))
-    ntinst.startClientTeam(team)
     if server:
         print("Setting up NetworkTables server...")
         ntinst.startServer()
     else:
+        print("Setting up NetworkTables client for team {}".format(team))
+        ntinst.startClientTeam(team)
+
         # Wait for Network Tables to be connected
         connected = False
         attempt = 0
