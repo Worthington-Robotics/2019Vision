@@ -57,10 +57,14 @@ class ContourData:
 # Enable/Disable saving of images
 ENABLE_IMAGE_SAVE = True
 
+# USB Related directories/files
 USB_ROOT_PATH = "/dev/sda"
 USB_MOUNT_DIR = "/media/usb0"
 IMAGE_DIR = USB_MOUNT_DIR + "/images"
+LOG_FILE = "log.txt"
 today_dir = None
+
+# Number of frames between saving images
 FRAME_INTERVAL = 25
 frame_index = 0
 
@@ -161,12 +165,12 @@ def execute(cmd):
     Execute a shell command on the pi and continuously yield the output
     """
 
-    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                             universal_newlines=True)
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+
     for stdout_line in iter(popen.stdout.readline, ""):
         yield stdout_line
-    popen.stdout.close()
 
+    popen.stdout.close()
     popen.wait()
 
 
@@ -183,12 +187,33 @@ def makeDirectory(dir_path):
         print(out, end="")
 
 
+def logMessage(message, debug=False):
+    """
+    Output to log file on USB and print to console
+    """
+    global today_dir
+
+    if ((debug and ENABLE_DEBUG) or not debug):
+        if (today_dir != None):
+            log = today_dir + "/" + LOG_FILE
+            now = datetime.datetime.now()
+            time = now.strftime("%H-%M-%S")
+            line = time + ": " + message + "\n"
+
+            file = open(log, "a+")
+            file.write(line)
+            file.flush()
+            file.close()
+
+        print(message)
+
+
 def parseError(line):
     """
     Report parse error.
     """
 
-    print("config error in '" + config_file + "': " + line, file=sys.stderr)
+    logMessage("config error in '" + config_file + "': " + line, file=sys.stderr)
 
 
 def readCameraConfig(config):
@@ -234,9 +259,7 @@ def readConfig():
         with open(config_file, "rt") as f:
             j = json.load(f)
     except OSError as err:
-        print(
-            "could not open '{}': {}".format(config_file, err),
-            file=sys.stderr)
+        logMessage("could not open '{}': {}".format(config_file, err), file=sys.stderr)
         return False
 
     # Top level must be an object
@@ -285,10 +308,10 @@ def startNetworkTables():
     ntinst = NetworkTablesInstance.getDefault()
 
     if server:
-        print("Setting up NetworkTables server...")
+        logMessage("Setting up NetworkTables server...")
         ntinst.startServer()
     else:
-        print("Setting up NetworkTables client for team {}".format(team))
+        logMessage("Setting up NetworkTables client for team {}".format(team))
         ntinst.startClientTeam(team)
 
         # Wait for Network Tables to be connected
@@ -297,8 +320,8 @@ def startNetworkTables():
         while (not connected and attempt < retry_attempts):
             time.sleep(1)
             connected = isConnectedToRobot(ntinst)
-            print("NetworkTables Connected: " +
-                  str(connected) + ", Attempt: " + str(attempt))
+            logMessage("NetworkTables Connected: " +
+                       str(connected) + ", Attempt: " + str(attempt))
             attempt += 1
 
         if (not connected):
@@ -317,7 +340,7 @@ def isConnectedToRobot(ntinst):
     ntinst = NetworkTablesInstance.getDefault()
     table = ntinst.getTable(SMART_DASHBOARD).getSubTable(VISION_TABLE)
     value = table.getString(CONNECTION_STATUS, "NOT_INIT")
-    print("Connection Status: " + value)
+    logMessage("Connection Status: " + value)
 
     # Restart the script when the RoboRio is first connected to the Network Tables
     if (value == "PING"):
@@ -348,7 +371,7 @@ def waitForConnection(table):
         value = table.getString(CONNECTION_STATUS, "NOT_INIT")
         connected = (value == "CONNECTED")
 
-        print("Connection Status: " + str(value) + ", Attempt: " + str(attempt))
+        logMessage("Connection Status: " + str(value) + ", Attempt: " + str(attempt))
         attempt += 1
 
     return connected
@@ -400,7 +423,7 @@ def startVisionCamera(config):
     Start running the vision camera.
     """
 
-    print("Starting camera '{}' on {}".format(config.name, config.path))
+    logMessage("Starting camera '{}' on {}".format(config.name, config.path))
     inst = CameraServer.getInstance()
     camera = UsbCamera(config.name, config.path)
 
@@ -409,7 +432,7 @@ def startVisionCamera(config):
 
     # Start automatic capture stream
     if (ENABLE_RAW_STREAM):
-        print("Starting Raw Output Stream...")
+        logMessage("Starting Raw Output Stream...")
 
         camera_server = inst.startAutomaticCapture(
             camera=camera, return_server=True)
@@ -425,7 +448,7 @@ def startDriveCamera(config):
     Start running a drive camera.
     """
 
-    print("Starting camera '{}' on {}".format(config.name, config.path))
+    logMessage("Starting camera '{}' on {}".format(config.name, config.path))
     camera = UsbCamera("Drive", config.path)
 
     camera.setConfigJson(json.dumps(config.config))
@@ -452,7 +475,7 @@ def switchDriveCamera():
     value = table.getString(CAMERA_SELECTION, "Front")
 
     if (value != last_selection):
-        print("Switching Camera Source: " + str(value))
+        logMessage("Switching Camera Source: " + str(value))
 
     if (server is not None and value != last_selection):
         if (front_camera is not None and value == "Front"):
@@ -484,7 +507,7 @@ def startOutputSource(width, height):
     Create an output source and server to ouput custom frames.
     """
 
-    print("Starting Custom Output Stream...")
+    logMessage("Starting Custom Output Stream...")
 
     inst = CameraServer.getInstance()
     cv_source = inst.putVideo("grip", width, height)
@@ -524,7 +547,7 @@ def processFrame(frame, pipeline: GripPipeline):
         contour_data = calculateContourData(pipeline)
 
     except (ZeroDivisionError):
-        print("Divide by 0 exception in GRIP Pipeline")
+        logMessage("Divide by 0 exception in GRIP Pipeline")
 
     # Find the closest target
     (center_x, center_y) = findClosestTarget(contour_data)
@@ -554,8 +577,7 @@ def calculateContourData(pipeline):
 
             contour_data.append(ContourData(cx, cy, box, left))
 
-    if (ENABLE_DEBUG):
-        print('Found ' + str(len(contour_data)) + ' Contours')
+    logMessage('Found ' + str(len(contour_data)) + ' Contours', True)
 
     return contour_data
 
@@ -608,8 +630,7 @@ def findClosestTarget(contour_data):
     # Find all pairs
     pairs = findPairs(contour_data)
 
-    if (ENABLE_DEBUG):
-        print('Found ' + str(len(pairs)) + ' Pairs')
+    logMessage('Found ' + str(len(pairs)) + ' Pairs', True)
 
     # Find closest pair
     (center_x, center_y) = findClosestPair(pairs)
@@ -705,9 +726,8 @@ def publishValues(center_x, center_y, angle_offset):
     table.putValue("centerY", center_y)
     table.putValue("angleOffset", angle_offset)
 
-    if (ENABLE_DEBUG):
-        print('Center: (' + str(center_x) + ', ' + str(center_y) + ')')
-        print('Angle Offset: ' + str(angle_offset))
+    logMessage('Center: (' + str(center_x) + ', ' + str(center_y) + ')', True)
+    logMessage('Angle Offset: ' + str(angle_offset), True)
 
 
 def writeFrame(cv_source, frame, x, y, contour_data):
@@ -748,9 +768,8 @@ def saveFrame(frame):
         name = today_dir + "/" + now.strftime("%H-%M-%S") + ".jpeg"
 
         write = cv2.imwrite(name, frame)
-        if (ENABLE_DEBUG):
-            print("Saving Frame: " + name)
-            print("Write: " + str(write))
+        logMessage("Saving Frame: " + name, True)
+        logMessage("Write: " + str(write), True)
 
         frame_index = 0
 
@@ -777,8 +796,7 @@ def processVision(camera, pipeline: GripPipeline, cv_source):
 
         end = time.time()
 
-        if (ENABLE_DEBUG):
-            print('Frame process time: ' + str(end - start) + ' s\n')
+        logMessage('Frame process time: ' + str(end - start) + ' s\n', True)
 
 
 def main():
@@ -790,7 +808,7 @@ def main():
     # Read configuration
     if len(sys.argv) >= 2:
         config_file = sys.argv[1]
-        print("Using argv config file: " + config_file)
+        logMessage("Using argv config file: " + config_file)
 
     read = readConfig()
     if not read:
@@ -803,7 +821,7 @@ def main():
     (vision_camera, cv_source) = startCameras()
 
     # Initialize Grip Pipeline
-    print("Running Grip Pipeline...")
+    logMessage("Running Grip Pipeline...")
     pipeline = GripPipeline()
 
     # Continuously process vision pipeline
