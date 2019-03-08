@@ -58,9 +58,15 @@
         var driveUrl = "http://frcvision.local:1182/stream.mjpg";
         var visionUrl = "http://frcvision.local:1181/stream.mjpg";
 
-        function updateImages() {
-            document.getElementById("Drive").src = driveUrl + new Date().getTime();
-            document.getElementById("Vision").src = visionUrl + new Date().getTime();
+        async function updateImages() {
+            console.log("Reconnecting to streams...")
+            await sleep(5000);
+            document.getElementById("Drive").src = driveUrl + "?time=" + new Date().getTime();
+            document.getElementById("Vision").src = visionUrl + "?time=" + new Date().getTime();
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
     </script>
 </head>
