@@ -11,6 +11,21 @@
             height: 100%;
             display: flex;
             flex-direction: row;
+
+        }
+
+        @media only screen and (max-device-width: 480px) {
+            .outer {
+                flex-direction: column;
+                height: fit-content;
+            }
+        }
+
+        @media only screen and (min-width: 320px) and (max-width: 600px) {
+            .outer {
+                flex-direction: column;
+                height: fit-content;
+            }
         }
 
         .drive {
@@ -34,23 +49,29 @@
             border-style: solid;
         }
     </style>
+
+    <script>
+        // var driveUrl = "http://camera1.mairie-brest.fr/mjpg/video.mjpg?resolution=320x240";
+        // var visionUrl = "http://camera1.mairie-brest.fr/mjpg/video.mjpg?resolution=320x240";
+        // var driveUrl = "http://192.168.1.98:1182/stream.mjpg";
+        // var visionUrl = "http://192.168.1.98:1181/stream.mjpg";
+        var driveUrl = "http://frcvision.local:1182/stream.mjpg";
+        var visionUrl = "http://frcvision.local:1181/stream.mjpg";
+
+        function updateImages() {
+            document.getElementById("Drive").src = driveUrl + new Date().getTime();
+            document.getElementById("Vision").src = visionUrl + new Date().getTime();
+        }
+    </script>
 </head>
 
 <body>
     <div class="outer">
         <div class="drive">
-            <!-- Test Stream
-            <img id="Drive" src="http://camera1.mairie-brest.fr/mjpg/video.mjpg?resolution=320x240"></img>
-             -->
-
-            <img id="Drive" src="http://frcvision.local:1182/stream.mjpg"></img>
+            <img id="Drive" src="driveUrl" onerror="updateImages()"></img>
         </div>
         <div class="vision">
-            <!-- Test Stream
-            <img id="grip" src="http://camera1.mairie-brest.fr/mjpg/video.mjpg?resolution=320x240"></img>
-            -->
-
-            <img id="grip" src="http://frcvision.local:1181/stream.mjpg"></img>
+            <img id="Vision" src="driveUrl" onerror="updateImages()"></img>
         </div>
     </div>
 </body>
