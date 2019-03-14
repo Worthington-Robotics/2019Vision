@@ -60,7 +60,7 @@
 
         async function updateImages() {
             console.log("Reconnecting to streams...")
-            await sleep(5000);
+            await sleep(1000);
             document.getElementById("Drive").src = driveUrl + "?time=" + new Date().getTime();
             document.getElementById("Vision").src = visionUrl + "?time=" + new Date().getTime();
         }
