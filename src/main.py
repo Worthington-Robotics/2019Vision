@@ -23,10 +23,10 @@ from vision import CameraHost, ConfigParser, Connection, Constants, Logger, UsbD
 def main():
 
     # Start the USB drive
-    usbDrive = UsbDrive()
+    usb_drive = UsbDrive()
 
     # Create logger
-    logger = Logger(usbDrive)
+    logger = Logger(usb_drive)
 
     # Parse config from file
     config = ConfigParser(logger)
@@ -35,15 +35,15 @@ def main():
     connection = Connection(logger, config.server, config.team)
 
     # Start camera(s)
-    cameraHost = CameraHost(logger, config.camera_configs, connection)
+    camera_host = CameraHost(logger, config.camera_configs, connection)
 
     # Create Vision Processor
-    visionProcessor = VisionProcessor(logger, connection, cameraHost)
+    visionProcessor = VisionProcessor(logger, connection, camera_host)
 
     # Continuously process vision pipeline
     while True:
         visionProcessor.processVision()
-        cameraHost.switchDriveCamera()
+        camera_host.switchDriveCamera()
 
 
 if __name__ == "__main__":

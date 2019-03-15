@@ -13,10 +13,7 @@ import time
 import numpy as np
 from math import sqrt, degrees, atan
 import cv2
-from .grip import GripPipeline
-from .constants import Constants
-from .connection import Connection
-from .cameraHost import CameraHost
+from . import CameraHost, Connection, Constants, GripPipeline, Logger
 
 
 class ContourData:
@@ -33,7 +30,7 @@ class ContourData:
 
 class VisionProcessor:
 
-    def __init__(self, logger, connection: Connection, camera_host: CameraHost):
+    def __init__(self, logger: Logger, connection: Connection, camera_host: CameraHost):
         self.logger = logger
         self.connection = connection
         self.camera_host = camera_host
