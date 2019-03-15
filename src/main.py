@@ -36,10 +36,9 @@ def main():
 
     # Start camera(s)
     cameraHost = CameraHost(logger, config.camera_configs, connection)
-    (vision_camera, cv_source) = cameraHost.startCameras()
 
     # Create Vision Processor
-    visionProcessor = VisionProcessor(logger, connection, vision_camera, cv_source, cameraHost.parsed_width)
+    visionProcessor = VisionProcessor(logger, connection, cameraHost)
 
     # Continuously process vision pipeline
     while True:

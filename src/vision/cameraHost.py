@@ -18,9 +18,18 @@ from .constants import Constants
 
 class CameraHost:
 
-    parsed_height = None
+    # Width/Height of the vision camera
     parsed_width = None
+    parsed_height = None
+
+    # Vision camera
+    vision_camera = None
+    # Source for outputting OpenCV frames
+    cv_source = None
+
+    # Drive camera server
     drive_server = None
+    # Drive cameras
     front_camera = None
     back_camera = None
     last_selection = None
@@ -30,25 +39,24 @@ class CameraHost:
         self.camera_configs = camera_configs
         self.connection = connection
 
+        self.startCameras()
+
     def startCameras(self):
         """
         Start all connected cameras.
         """
-
-        vision_camera = None
-        cv_source = None
 
         if (len(self.camera_configs) > 0):
 
             # Start vision camera
             camera_config = self.camera_configs[0]
             (self.parsed_width, self.parsed_height) = self.parseDimensions(camera_config)
-            vision_camera = self.startVisionCamera(camera_config)
+            self.vision_camera = self.startVisionCamera(camera_config)
             time.sleep(1)
 
             # Start custom output stream
             if (Constants.ENABLE_CUSTOM_STREAM):
-                cv_source = self.startOutputSource(self.parsed_width, self.parsed_height)
+                self.cv_source = self.startOutputSource(self.parsed_width, self.parsed_height)
 
             # Start the switchable camera stream
             inst = CameraServer.getInstance()
@@ -61,8 +69,6 @@ class CameraHost:
 
                 if (len(self.camera_configs) == 3):
                     self.back_camera = self.startDriveCamera(self.camera_configs[2])
-
-        return (vision_camera, cv_source)
 
     def startVisionCamera(self, config):
         """
@@ -103,7 +109,7 @@ class CameraHost:
 
     def switchDriveCamera(self):
         """
-        Switch the source of the drive camera
+        Switch the source of the drive camera.
         """
 
         value = self.connection.getCameraSelection()
@@ -145,3 +151,27 @@ class CameraHost:
         cv_source = inst.putVideo("grip", width, height)
 
         return cv_source
+
+    def readVisionFrame(self):
+        """
+        Reads the latest frame from the camera server instance to pass to opencv.
+        :param camera: The camera to read from
+        :return: The latest frame
+        """
+
+        frame = None
+        if (self.vision_camera is not None):
+            inst = CameraServer.getInstance()
+            cv_sink = inst.getVideo(camera=self.vision_camera)
+
+            (frame_time, frame) = cv_sink.grabFrame(None)
+
+        return frame
+
+    def outputVisionFrame(self, frame):
+        """
+        Output an OpenCV frame to the custom vision camera server.
+        """
+
+        if (self.cv_source is not None):
+            self.cv_source.putFrame(frame)

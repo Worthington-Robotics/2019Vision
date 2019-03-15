@@ -13,9 +13,10 @@ import time
 import numpy as np
 from math import sqrt, degrees, atan
 import cv2
-from cscore import CameraServer
 from .grip import GripPipeline
 from .constants import Constants
+from .connection import Connection
+from .cameraHost import CameraHost
 
 
 class ContourData:
@@ -32,27 +33,12 @@ class ContourData:
 
 class VisionProcessor:
 
-    def __init__(self, logger, connection, vision_camera, cv_source, parsed_width):
+    def __init__(self, logger, connection: Connection, camera_host: CameraHost):
         self.logger = logger
         self.connection = connection
-        self.vision_camera = vision_camera
-        self.cv_source = cv_source
-        self.parsed_width = parsed_width
+        self.camera_host = camera_host
+        self.parsed_width = camera_host.parsed_width
         self.pipeline = GripPipeline()
-
-    def readFrame(self, camera):
-        """
-        Reads the latest frame from the camera server instance to pass to opencv.
-        :param camera: The camera to read from
-        :return: The latest frame
-        """
-
-        inst = CameraServer.getInstance()
-        cv_sink = inst.getVideo(camera=camera)
-
-        (frame_time, frame) = cv_sink.grabFrame(None)
-
-        return frame
 
     def processFrame(self, frame, pipeline: GripPipeline):
         """
@@ -145,7 +131,7 @@ class VisionProcessor:
 
     def findClosestTarget(self, contour_data):
         """
-        Find the nearest pair of contours that look like: / \
+        Find the nearest pair of contours that look like: / \ 
         """
 
         # Find all pairs
@@ -160,7 +146,7 @@ class VisionProcessor:
 
     def findPairs(self, contour_data):
         """
-        Find all pairs of contours that look like: / \
+        Find all pairs of contours that look like: / \ 
         """
 
         pairs = []
@@ -217,7 +203,7 @@ class VisionProcessor:
 
     def calculateAngleOffset(self, center_x):
         """
-        Calculates the angle offset.
+        Calculate the angle offset.
         (i.e. how much the robot should turn in order to face the target)
         """
 
@@ -229,7 +215,7 @@ class VisionProcessor:
 
         return angle_offset
 
-    def writeFrame(self, cv_source, frame, x, y, contour_data):
+    def writeFrame(self, frame, x, y, contour_data):
         """
         Draw crosshairs on the target and put the frame in the output stream.
         """
@@ -251,26 +237,25 @@ class VisionProcessor:
                     markerSize=40,
                     thickness=3)
 
-            cv_source.putFrame(frame)
+            self.camera_host.outputVisionFrame(frame)
 
     def processVision(self):
         """
         Read the latest frame and process using the Grip Pipeline.
         """
 
-        if (self.vision_camera is not None):
-            start = time.time()
+        start = time.time()
 
-            frame = self.readFrame(self.vision_camera)
-            if (frame is not None):
-                (x, y, contour_data) = self.processFrame(frame, self.pipeline)
+        frame = self.camera_host.readVisionFrame()
+        if (frame is not None):
+            (x, y, contour_data) = self.processFrame(frame, self.pipeline)
 
-                angle_offset = self.calculateAngleOffset(x)
+            angle_offset = self.calculateAngleOffset(x)
 
-                self.connection.publishValues(x, y, angle_offset)
+            self.connection.publishValues(x, y, angle_offset)
 
-                self.writeFrame(self.cv_source, frame, x, y, contour_data)
+            self.writeFrame(frame, x, y, contour_data)
 
-            end = time.time()
+        end = time.time()
 
-            self.logger.logMessage('Frame process time: ' + str(end - start) + ' s\n', True)
+        self.logger.logMessage('Frame process time: ' + str(end - start) + ' s\n', True)
