@@ -22,7 +22,7 @@ class Logger:
 
     def logMessage(self, message, debug=False):
         """
-        Output to log file on USB and print to console
+        Output to log file on USB and print to console.
         """
 
         if ((debug and Constants.ENABLE_DEBUG) or not debug):
@@ -33,7 +33,7 @@ class Logger:
 
     def saveFrame(self, frame):
         """
-        Save the frame to the USB drive
+        Save the frame to the USB drive.
         """
 
         (name, write) = self.usbDrive.saveFrame(frame)

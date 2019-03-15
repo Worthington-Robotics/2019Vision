@@ -34,7 +34,7 @@ class UsbDrive:
 
     def startUsbDrive(self):
         """
-        Mount USB drive and create the images folder
+        Mount USB drive and create the images folder.
         """
 
         # Create the mount point
@@ -72,7 +72,7 @@ class UsbDrive:
 
     def getUsbPath(self):
         """
-        Get the path of the last USB drive inserted
+        Get the path of the last USB drive inserted.
         """
         usb_path = None
 
@@ -89,7 +89,7 @@ class UsbDrive:
 
     def execute(self, cmd):
         """
-        Execute a shell command on the pi and continuously yield the output
+        Execute a shell command on the pi and continuously yield the output.
         """
 
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
@@ -102,7 +102,7 @@ class UsbDrive:
 
     def makeDirectory(self, dir_path):
         """
-        Create a directory/folder on the file system
+        Create a directory/folder on the file system.
         """
 
         # Create the images folder
@@ -118,7 +118,7 @@ class UsbDrive:
 
     def logMessage(self, message):
         """
-        Output to log file on USB and print to console
+        Output to log file on USB and print to console.
         """
 
         if (self.today_dir != None):
@@ -134,7 +134,7 @@ class UsbDrive:
 
     def saveFrame(self, frame):
         """
-        Save the frame to the USB drive
+        Save the frame to the USB drive.
         """
 
         name = None

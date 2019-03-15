@@ -123,7 +123,7 @@ class Connection:
 
     def getCameraSelection(self):
         """
-        Get the current camera selection from the Network Tables
+        Get the current camera selection from the Network Tables.
         """
 
         ntinst = NetworkTablesInstance.getDefault()
