@@ -118,9 +118,9 @@ class CameraHost:
             self.logger.logMessage("Switching Camera Source: " + str(value))
 
         if (self.drive_server is not None and value != self.last_selection):
-            if (self.front_camera is not None and value == "Front"):
+            if (self.front_camera is not None and self.front_camera.isConnected() and value == "Front"):
                 self.drive_server.setSource(self.front_camera)
-            elif (self.back_camera is not None and value == "Back"):
+            elif (self.back_camera is not None and self.back_camera.isConnected() and value == "Back"):
                 self.drive_server.setSource(self.back_camera)
 
         self.last_selection = value
