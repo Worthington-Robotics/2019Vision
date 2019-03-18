@@ -77,45 +77,6 @@
                 "properties": []
             },
             "width": 320
-        },
-        {
-            "brightness": 50,
-            "exposure": "auto",
-            "fps": 10,
-            "height": 240,
-            "name": "Back",
-            "path": "/dev/video2",
-            "pixel format": "mjpeg",
-            "properties": [
-                {
-                    "name": "connect_verbose",
-                    "value": 1
-                },
-                {
-                    "name": "contrast",
-                    "value": 50
-                },
-                {
-                    "name": "saturation",
-                    "value": 50
-                },
-                {
-                    "name": "power_line_frequency",
-                    "value": 1
-                },
-                {
-                    "name": "sharpness",
-                    "value": 50
-                },
-                {
-                    "name": "backlight_compensation",
-                    "value": 0
-                }
-            ],
-            "stream": {
-                "properties": []
-            },
-            "width": 320
         }
     ],
     "ntmode": "client",
