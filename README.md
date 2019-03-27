@@ -3,6 +3,8 @@ This directory contains Python scripts that can be used to run a GRIP Pipeline v
 
 http://wpilib.screenstepslive.com/s/currentCS/m/85074/l/1027798-the-raspberry-pi-frc-console
 
+![VisionDiagram](documentation/Vision%20Diagram.png)
+
 ## Documentation
 For setup instructions, see the documentation folder of this repository.
 
@@ -21,7 +23,3 @@ Ports begin at 1181 and are in the order of:
 1. Vision raw stream (if enabled)
 2. Vision custom output stream (if enabled)
 3. Drive camera stream (if present)
-
-## Vision Algorithm
-
-![VisionDiagram](documentation/Vision%20Diagram.png)
