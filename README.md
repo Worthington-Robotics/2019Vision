@@ -3,6 +3,7 @@ This directory contains Python scripts that can be used to run a GRIP Pipeline v
 
 http://wpilib.screenstepslive.com/s/currentCS/m/85074/l/1027798-the-raspberry-pi-frc-console
 
+## Vision Processing Algorithm
 ![VisionDiagram](documentation/Vision%20Diagram.png)
 
 ## Documentation
