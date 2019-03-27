@@ -22,4 +22,4 @@ Ports begin at 1181 and are in the order of:
 2. Vision custom output stream (if enabled)
 3. Drive camera stream (if present)
 
-[[https://github.com/Worthington-Robotics/2019Vision/blob/master/documentation/Vision%20Diagram.png|alt=VisionDiagram]]
+![VisionDiagram](documentation/Vision%20Diagram.png)
